@@ -273,15 +273,28 @@ public class UpdateChecker {
             
             plugin.getLogger().info("Downloading update from: " + jarDownloadUrl);
             
-            // Create update directory
-            File updateDir = new File(plugin.getDataFolder().getParentFile(), "update");
-            if (!updateDir.exists()) {
-                updateDir.mkdirs();
+            // Download directly to plugins folder (not /update subfolder)
+            File pluginsDir = plugin.getDataFolder().getParentFile();
+            
+            // Find the current JAR file name
+            String currentJarName = null;
+            File currentJarFile = null;
+            for (File file : pluginsDir.listFiles()) {
+                if (file.getName().toLowerCase().startsWith("rentabot") && file.getName().endsWith(".jar")) {
+                    currentJarName = file.getName();
+                    currentJarFile = file;
+                    break;
+                }
             }
             
-            // Download file
+            // Download file - use versioned name directly to plugins folder
             String fileName = "RentABot-" + latestVersion + ".jar";
-            File targetFile = new File(updateDir, fileName);
+            File targetFile = new File(pluginsDir, fileName);
+            
+            // If same name as current, add .new extension to avoid conflicts
+            if (currentJarFile != null && targetFile.getAbsolutePath().equals(currentJarFile.getAbsolutePath())) {
+                targetFile = new File(pluginsDir, fileName + ".new");
+            }
             
             HttpURLConnection connection = (HttpURLConnection) URI.create(jarDownloadUrl).toURL().openConnection();
             connection.setRequestMethod("GET");
@@ -318,19 +331,59 @@ public class UpdateChecker {
             downloadCompleted = true;
             downloadedFilePath = targetFile.getAbsolutePath();
             
-            String successMsg = "Update downloaded successfully! File: " + fileName;
-            plugin.getLogger().info("═══════════════════════════════════════════════════════");
+            // Try to delete the old JAR file automatically
+            boolean oldJarDeleted = false;
+            boolean needsManualDelete = false;
+            
+            if (currentJarFile != null && !currentJarFile.getName().equals(targetFile.getName())) {
+                // Try to delete the old JAR
+                try {
+                    oldJarDeleted = currentJarFile.delete();
+                    if (!oldJarDeleted) {
+                        // On Windows, file may be locked - try to delete on JVM exit
+                        currentJarFile.deleteOnExit();
+                        needsManualDelete = true;
+                        plugin.debug("Could not delete old JAR immediately, marked for deletion on exit");
+                    } else {
+                        plugin.debug("Successfully deleted old JAR: " + currentJarFile.getName());
+                    }
+                } catch (SecurityException e) {
+                    needsManualDelete = true;
+                    plugin.debug("Security exception deleting old JAR: " + e.getMessage());
+                }
+            }
+            
+            String successMsg = "Update downloaded successfully! File: " + targetFile.getName();
+            plugin.getLogger().info("═══════════════════════════════════════════════════════════════");
             plugin.getLogger().info("  " + successMsg);
             plugin.getLogger().info("  Location: " + targetFile.getAbsolutePath());
+            if (oldJarDeleted) {
+                plugin.getLogger().info("  Old JAR deleted: " + currentJarFile.getName());
+            }
+            if (needsManualDelete) {
+                plugin.getLogger().info("  ");
+                plugin.getLogger().info("  NOTE: Old JAR could not be deleted (file in use)");
+                plugin.getLogger().info("  After restart, manually delete: " + currentJarFile.getName());
+            }
             plugin.getLogger().info("  Restart the server to apply the update!");
-            plugin.getLogger().info("═══════════════════════════════════════════════════════");
+            plugin.getLogger().info("  Your data will be preserved and migrated automatically.");
+            plugin.getLogger().info("═══════════════════════════════════════════════════════════════");
             
             if (notifyTarget != null) {
                 notifyOnMainThread(notifyTarget, "");
                 notifyOnMainThread(notifyTarget, "§a§l[RentABot] Update downloaded successfully!");
-                notifyOnMainThread(notifyTarget, "§7File: §f" + fileName);
-                notifyOnMainThread(notifyTarget, "§7Location: §f" + updateDir.getPath());
+                notifyOnMainThread(notifyTarget, "§7File: §f" + targetFile.getName());
+                notifyOnMainThread(notifyTarget, "§7Location: §f" + pluginsDir.getPath());
+                if (oldJarDeleted) {
+                    notifyOnMainThread(notifyTarget, "§7Old JAR deleted: §c" + currentJarFile.getName());
+                }
+                notifyOnMainThread(notifyTarget, "");
                 notifyOnMainThread(notifyTarget, "§e§lRestart the server to apply the update!");
+                if (needsManualDelete) {
+                    notifyOnMainThread(notifyTarget, "§7§o(After restart, delete old file: " + currentJarFile.getName() + ")");
+                }
+                notifyOnMainThread(notifyTarget, "");
+                notifyOnMainThread(notifyTarget, "§7§oYour bots and data will be preserved and migrated automatically.");
                 notifyOnMainThread(notifyTarget, "");
             }
             
