@@ -100,6 +100,9 @@ public class StorageManager {
                 display_name VARCHAR(64) NOT NULL,
                 owner_uuid VARCHAR(36) NOT NULL,
                 owner_name VARCHAR(16) NOT NULL,
+                status VARCHAR(16) DEFAULT 'ACTIVE',
+                remaining_seconds BIGINT DEFAULT 0,
+                last_active BIGINT,
                 created_at BIGINT NOT NULL,
                 expires_at BIGINT NOT NULL,
                 world VARCHAR(64),
@@ -123,17 +126,28 @@ public class StorageManager {
              Statement stmt = conn.createStatement()) {
             stmt.execute(createRentalsTable);
             
-            // Try to add spawn columns if they don't exist (for existing databases)
-            try {
-                stmt.execute("ALTER TABLE " + tablePrefix + "rentals ADD COLUMN spawn_world VARCHAR(64)");
-                stmt.execute("ALTER TABLE " + tablePrefix + "rentals ADD COLUMN spawn_x DOUBLE DEFAULT 0");
-                stmt.execute("ALTER TABLE " + tablePrefix + "rentals ADD COLUMN spawn_y DOUBLE DEFAULT 0");
-                stmt.execute("ALTER TABLE " + tablePrefix + "rentals ADD COLUMN spawn_z DOUBLE DEFAULT 0");
-                stmt.execute("ALTER TABLE " + tablePrefix + "rentals ADD COLUMN spawn_yaw FLOAT DEFAULT 0");
-                stmt.execute("ALTER TABLE " + tablePrefix + "rentals ADD COLUMN spawn_pitch FLOAT DEFAULT 0");
-            } catch (SQLException ignored) {
-                // Columns already exist
-            }
+            // Try to add columns if they don't exist (for existing databases)
+            tryAddColumn(stmt, "spawn_world", "VARCHAR(64)");
+            tryAddColumn(stmt, "spawn_x", "DOUBLE DEFAULT 0");
+            tryAddColumn(stmt, "spawn_y", "DOUBLE DEFAULT 0");
+            tryAddColumn(stmt, "spawn_z", "DOUBLE DEFAULT 0");
+            tryAddColumn(stmt, "spawn_yaw", "FLOAT DEFAULT 0");
+            tryAddColumn(stmt, "spawn_pitch", "FLOAT DEFAULT 0");
+            // New columns for bot lifecycle
+            tryAddColumn(stmt, "status", "VARCHAR(16) DEFAULT 'ACTIVE'");
+            tryAddColumn(stmt, "remaining_seconds", "BIGINT DEFAULT 0");
+            tryAddColumn(stmt, "last_active", "BIGINT");
+        }
+    }
+    
+    /**
+     * Helper method to add a column if it doesn't exist.
+     */
+    private void tryAddColumn(Statement stmt, String columnName, String columnDef) {
+        try {
+            stmt.execute("ALTER TABLE " + tablePrefix + "rentals ADD COLUMN " + columnName + " " + columnDef);
+        } catch (SQLException ignored) {
+            // Column already exists
         }
     }
     
@@ -143,19 +157,24 @@ public class StorageManager {
     public void saveRental(RentableBot bot) {
         String sql = """
             INSERT OR REPLACE INTO %srentals 
-            (bot_name, display_name, owner_uuid, owner_name, created_at, expires_at, world, x, y, z, yaw, pitch,
+            (bot_name, display_name, owner_uuid, owner_name, status, remaining_seconds, last_active,
+             created_at, expires_at, world, x, y, z, yaw, pitch,
              spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.formatted(tablePrefix);
         
         // MySQL uses different syntax
         if (plugin.getConfig().getString("storage.type", "sqlite").equalsIgnoreCase("mysql")) {
             sql = """
                 INSERT INTO %srentals 
-                (bot_name, display_name, owner_uuid, owner_name, created_at, expires_at, world, x, y, z, yaw, pitch,
+                (bot_name, display_name, owner_uuid, owner_name, status, remaining_seconds, last_active,
+                 created_at, expires_at, world, x, y, z, yaw, pitch,
                  spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
+                status = VALUES(status),
+                remaining_seconds = VALUES(remaining_seconds),
+                last_active = VALUES(last_active),
                 expires_at = VALUES(expires_at),
                 world = VALUES(world),
                 x = VALUES(x),
@@ -179,34 +198,37 @@ public class StorageManager {
             stmt.setString(2, bot.getDisplayName());
             stmt.setString(3, bot.getOwnerUUID().toString());
             stmt.setString(4, bot.getOwnerName());
-            stmt.setLong(5, bot.getCreatedAt().toEpochMilli());
-            stmt.setLong(6, bot.getExpiresAt().toEpochMilli());
-            stmt.setString(7, bot.getWorld());
-            stmt.setDouble(8, bot.getX());
-            stmt.setDouble(9, bot.getY());
-            stmt.setDouble(10, bot.getZ());
-            stmt.setFloat(11, bot.getYaw());
-            stmt.setFloat(12, bot.getPitch());
+            stmt.setString(5, bot.getStatus().name());
+            stmt.setLong(6, bot.getRemainingSeconds());
+            stmt.setLong(7, bot.getLastActiveAt() != null ? bot.getLastActiveAt().toEpochMilli() : System.currentTimeMillis());
+            stmt.setLong(8, bot.getCreatedAt().toEpochMilli());
+            stmt.setLong(9, bot.getExpiresAt().toEpochMilli());
+            stmt.setString(10, bot.getWorld());
+            stmt.setDouble(11, bot.getX());
+            stmt.setDouble(12, bot.getY());
+            stmt.setDouble(13, bot.getZ());
+            stmt.setFloat(14, bot.getYaw());
+            stmt.setFloat(15, bot.getPitch());
             
             // Spawn point data
             if (bot.hasSpawnPoint()) {
-                stmt.setString(13, bot.getSavedWorld());
-                stmt.setDouble(14, bot.getSavedX());
-                stmt.setDouble(15, bot.getSavedY());
-                stmt.setDouble(16, bot.getSavedZ());
-                stmt.setFloat(17, bot.getSavedYaw());
-                stmt.setFloat(18, bot.getSavedPitch());
+                stmt.setString(16, bot.getSavedWorld());
+                stmt.setDouble(17, bot.getSavedX());
+                stmt.setDouble(18, bot.getSavedY());
+                stmt.setDouble(19, bot.getSavedZ());
+                stmt.setFloat(20, bot.getSavedYaw());
+                stmt.setFloat(21, bot.getSavedPitch());
             } else {
-                stmt.setNull(13, java.sql.Types.VARCHAR);
-                stmt.setDouble(14, 0);
-                stmt.setDouble(15, 0);
-                stmt.setDouble(16, 0);
-                stmt.setFloat(17, 0);
-                stmt.setFloat(18, 0);
+                stmt.setNull(16, java.sql.Types.VARCHAR);
+                stmt.setDouble(17, 0);
+                stmt.setDouble(18, 0);
+                stmt.setDouble(19, 0);
+                stmt.setFloat(20, 0);
+                stmt.setFloat(21, 0);
             }
             
             stmt.executeUpdate();
-            plugin.debug("Saved rental: " + bot.getInternalName());
+            plugin.debug("Saved rental: " + bot.getInternalName() + " (status: " + bot.getStatus() + ")");
             
         } catch (SQLException e) {
             plugin.getLogger().warning("Failed to save rental: " + e.getMessage());
@@ -233,15 +255,28 @@ public class StorageManager {
                 Instant createdAt = Instant.ofEpochMilli(rs.getLong("created_at"));
                 Instant expiresAt = Instant.ofEpochMilli(rs.getLong("expires_at"));
                 
+                // Load status and remaining time
+                String statusStr = rs.getString("status");
+                com.ximpify.rentabot.bot.BotStatus status = com.ximpify.rentabot.bot.BotStatus.fromString(statusStr);
+                long remainingSeconds = rs.getLong("remaining_seconds");
+                long lastActiveMillis = rs.getLong("last_active");
+                
                 // Calculate remaining hours (minimum 1 to properly reconstruct)
-                long remainingHours = Math.max(1, 
-                    (expiresAt.toEpochMilli() - System.currentTimeMillis()) / 3600000);
+                long remainingHours = Math.max(1, remainingSeconds / 3600);
+                if (status == com.ximpify.rentabot.bot.BotStatus.ACTIVE) {
+                    remainingHours = Math.max(1, (expiresAt.toEpochMilli() - System.currentTimeMillis()) / 3600000);
+                }
                 
                 RentableBot bot = new RentableBot(plugin, displayName, internalName, 
                     ownerUUID, ownerName, (int) remainingHours);
                 
                 bot.setCreatedAt(createdAt);
                 bot.setExpiresAt(expiresAt);
+                bot.setStatus(status);
+                bot.setRemainingSeconds(remainingSeconds);
+                if (lastActiveMillis > 0) {
+                    bot.setLastActiveAt(Instant.ofEpochMilli(lastActiveMillis));
+                }
                 
                 String world = rs.getString("world");
                 if (world != null) {

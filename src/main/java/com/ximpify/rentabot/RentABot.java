@@ -18,8 +18,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.logging.Level;
-
 public class RentABot extends JavaPlugin {
     
     private static RentABot instance;
@@ -82,7 +80,7 @@ public class RentABot extends JavaPlugin {
         
         // Startup message
         getLogger().info("╔════════════════════════════════════════╗");
-        getLogger().info("║          RentABot v" + getDescription().getVersion() + " Enabled          ║");
+        getLogger().info("║          RentABot v" + getPluginMeta().getVersion() + " Enabled          ║");
         getLogger().info("║      Pure Java AFK Bot Rental System    ║");
         getLogger().info("╠════════════════════════════════════════╣");
         getLogger().info("║  Economy: " + (economyEnabled ? "§aEnabled" : "§cDisabled") + "                       ║");

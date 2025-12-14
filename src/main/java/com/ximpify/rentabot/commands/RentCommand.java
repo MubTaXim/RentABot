@@ -1,6 +1,7 @@
 package com.ximpify.rentabot.commands;
 
 import com.ximpify.rentabot.RentABot;
+import com.ximpify.rentabot.bot.BotStatus;
 import com.ximpify.rentabot.bot.RentableBot;
 import com.ximpify.rentabot.rental.RentalManager.RentalResult;
 import org.bukkit.command.Command;
@@ -61,7 +62,9 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         switch (subCommand) {
             case "gui", "menu" -> plugin.getGUIManager().openMainMenu(player);
             case "create", "rent", "new" -> handleCreate(player, args);
-            case "stop", "remove", "delete" -> handleStop(player, args);
+            case "stop", "pause" -> handleStop(player, args);
+            case "resume", "continue", "unpause" -> handleResume(player, args);
+            case "delete", "remove" -> handleDelete(player, args);
             case "list", "ls" -> handleList(player);
             case "tp", "teleport", "summon" -> handleTeleport(player, args);
             case "rename" -> handleRename(player, args);
@@ -145,16 +148,132 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         }
         
         String botName = args[1];
+        
+        // Get bot first to show remaining time in message
+        var optBot = plugin.getBotManager().getBot(botName);
+        if (optBot.isEmpty() || !optBot.get().getOwnerUUID().equals(player.getUniqueId())) {
+            plugin.getMessageUtil().send(player, "general.bot-not-found", "bot", botName);
+            return;
+        }
+        
+        RentableBot bot = optBot.get();
+        if (bot.getStatus() != BotStatus.ACTIVE) {
+            plugin.getMessageUtil().send(player, "stop.already-stopped", "bot", botName);
+            return;
+        }
+        
+        // Calculate time remaining before stopping
+        Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
+        long secondsRemaining = Math.max(0, remaining.toSeconds());
+        
         RentalResult result = plugin.getRentalManager().stopRental(player, botName, false);
         
         if (result.success()) {
-            plugin.getMessageUtil().send(player, "stop.success", "bot", botName);
-            if (result.args().length > 1 && !result.args()[1].equals("0")) {
-                plugin.getMessageUtil().send(player, "economy.refunded", "price", result.args()[1]);
-            }
+            String timeLeft = plugin.getRentalManager().formatTime(secondsRemaining);
+            plugin.getMessageUtil().send(player, "stop.success", "bot", botName, "time", timeLeft);
             playSound(player, "on-stop");
         } else {
             String messageKey = result.messageKey().equals("not-found") ? "general.bot-not-found" : "stop." + result.messageKey();
+            plugin.getMessageUtil().send(player, messageKey, "bot", botName);
+        }
+    }
+    
+    private void handleResume(Player player, String[] args) {
+        if (!player.hasPermission("rentabot.resume")) {
+            plugin.getMessageUtil().send(player, "general.no-permission");
+            return;
+        }
+        
+        if (args.length < 2) {
+            plugin.getMessageUtil().send(player, "general.invalid-args");
+            plugin.getMessageUtil().sendRaw(player, "&7Usage: &f/rentabot resume <name> [hours]");
+            return;
+        }
+        
+        String botName = args[1];
+        
+        // Check if additional hours provided
+        int additionalHours = 0;
+        if (args.length >= 3) {
+            try {
+                additionalHours = Integer.parseInt(args[2]);
+                if (additionalHours < 1) {
+                    plugin.getMessageUtil().sendRaw(player, "&cHours must be at least 1!");
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                plugin.getMessageUtil().sendRaw(player, "&cInvalid hours: &f" + args[2]);
+                return;
+            }
+        }
+        
+        RentalResult result = plugin.getRentalManager().resumeRental(player, botName, additionalHours);
+        
+        if (result.success()) {
+            var optBot = plugin.getBotManager().getBot(botName);
+            if (optBot.isPresent()) {
+                Duration remaining = Duration.between(Instant.now(), optBot.get().getExpiresAt());
+                String timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
+                plugin.getMessageUtil().send(player, "resume.success", "bot", botName, "time", timeLeft);
+            } else {
+                plugin.getMessageUtil().send(player, "resume.success", "bot", botName, "time", "N/A");
+            }
+            playSound(player, "on-create");
+        } else {
+            String messageKey = switch (result.messageKey()) {
+                case "not-found" -> "general.bot-not-found";
+                case "not-owner" -> "general.not-owner";
+                case "max-active-reached" -> "resume.max-active";
+                case "already-active" -> "resume.already-active";
+                case "no-time-remaining" -> "resume.no-time";
+                case "insufficient-funds" -> "economy.insufficient-funds";
+                default -> "resume." + result.messageKey();
+            };
+            if (result.args() != null && result.args().length > 0) {
+                plugin.getMessageUtil().send(player, messageKey, parseResultArgs(result.messageKey(), result.args()));
+            } else {
+                plugin.getMessageUtil().send(player, messageKey, "bot", botName);
+            }
+        }
+    }
+    
+    private void handleDelete(Player player, String[] args) {
+        if (!player.hasPermission("rentabot.delete")) {
+            plugin.getMessageUtil().send(player, "general.no-permission");
+            return;
+        }
+        
+        if (args.length < 2) {
+            plugin.getMessageUtil().send(player, "general.invalid-args");
+            plugin.getMessageUtil().sendRaw(player, "&7Usage: &f/rentabot delete <name> [confirm]");
+            return;
+        }
+        
+        String botName = args[1];
+        
+        // Check if bot exists and player owns it
+        var optBot = plugin.getBotManager().getBot(botName);
+        if (optBot.isEmpty() || !optBot.get().getOwnerUUID().equals(player.getUniqueId())) {
+            plugin.getMessageUtil().send(player, "general.bot-not-found", "bot", botName);
+            return;
+        }
+        
+        // Require confirmation
+        boolean confirmed = args.length >= 3 && args[2].equalsIgnoreCase("confirm");
+        
+        if (!confirmed) {
+            plugin.getMessageUtil().send(player, "delete.confirm", "bot", botName);
+            plugin.getMessageUtil().sendRaw(player, "&7Type: &f/rentabot delete " + botName + " confirm");
+            return;
+        }
+        
+        RentalResult result = plugin.getRentalManager().deleteRental(player, botName, false);
+        
+        if (result.success()) {
+            plugin.getMessageUtil().send(player, "delete.success", "bot", botName);
+            playSound(player, "on-stop");
+        } else {
+            String messageKey = result.messageKey().equals("not-found") ? "general.bot-not-found" : "delete." + result.messageKey();
             plugin.getMessageUtil().send(player, messageKey, "bot", botName);
         }
     }
@@ -167,22 +286,68 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         
         var bots = plugin.getBotManager().getPlayerBots(player.getUniqueId());
         
-        plugin.getMessageUtil().send(player, "list.header");
+        // Count by status
+        int activeCount = 0, stoppedCount = 0, expiredCount = 0;
+        for (RentableBot bot : bots) {
+            switch (bot.getStatus()) {
+                case ACTIVE -> activeCount++;
+                case STOPPED -> stoppedCount++;
+                case EXPIRED -> expiredCount++;
+            }
+        }
+        
+        int maxActive = plugin.getConfig().getInt("limits.max-active-bots", 3);
+        int maxReserved = plugin.getConfig().getInt("limits.max-reserved-bots", 5);
+        
+        plugin.getMessageUtil().send(player, "list.header",
+            "active", String.valueOf(activeCount),
+            "stopped", String.valueOf(stoppedCount),
+            "expired", String.valueOf(expiredCount),
+            "max_active", String.valueOf(maxActive),
+            "max_reserved", String.valueOf(maxReserved));
         
         if (bots.isEmpty()) {
             plugin.getMessageUtil().send(player, "list.empty");
         } else {
             for (RentableBot bot : bots) {
-                Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
-                String timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
-                String status = bot.isConnected() 
+                String timeLeft;
+                String statusIndicator;
+                String statusName;
+                
+                switch (bot.getStatus()) {
+                    case ACTIVE -> {
+                        Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
+                        timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
+                        statusIndicator = "&a●";
+                        statusName = "ACTIVE";
+                    }
+                    case STOPPED -> {
+                        timeLeft = plugin.getRentalManager().formatTime(bot.getRemainingSeconds());
+                        statusIndicator = "&e●";
+                        statusName = "PAUSED";
+                    }
+                    case EXPIRED -> {
+                        timeLeft = "0s";
+                        statusIndicator = "&c●";
+                        statusName = "EXPIRED";
+                    }
+                    default -> {
+                        timeLeft = "?";
+                        statusIndicator = "&7●";
+                        statusName = "UNKNOWN";
+                    }
+                }
+                
+                String connectionStatus = bot.isConnected() 
                     ? plugin.getMessageUtil().getRaw("list.status-online")
                     : plugin.getMessageUtil().getRaw("list.status-offline");
                 
                 plugin.getMessageUtil().send(player, "list.entry",
                     "bot", bot.getInternalName(),
                     "time", timeLeft,
-                    "status", status);
+                    "status", connectionStatus,
+                    "state", statusName,
+                    "indicator", statusIndicator);
             }
         }
         
@@ -383,7 +548,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
     }
     
     private void showVersion(Player player) {
-        String version = plugin.getDescription().getVersion();
+        String version = plugin.getPluginMeta().getVersion();
         int totalBots = plugin.getBotManager().getAllBots().size();
         int connectedBots = (int) plugin.getBotManager().getAllBots().stream()
             .filter(RentableBot::isConnected).count();
@@ -402,8 +567,10 @@ public class RentCommand implements CommandExecutor, TabCompleter {
             String soundName = plugin.getConfig().getString("notifications.sounds." + soundKey);
             if (soundName != null) {
                 try {
-                    player.playSound(player.getLocation(), 
-                        org.bukkit.Sound.valueOf(soundName), 1.0f, 1.0f);
+                    org.bukkit.Sound sound = org.bukkit.Registry.SOUNDS.get(org.bukkit.NamespacedKey.minecraft(soundName.toLowerCase()));
+                    if (sound != null) {
+                        player.playSound(player.getLocation(), sound, 1.0f, 1.0f);
+                    }
                 } catch (Exception ignored) {}
             }
         }
@@ -429,27 +596,58 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
         
         if (args.length == 1) {
-            completions.addAll(Arrays.asList("gui", "shop", "create", "stop", "list", "tp", "rename", "extend", "info", "help", "version"));
+            completions.addAll(Arrays.asList("gui", "shop", "create", "stop", "resume", "delete", "list", "tp", "rename", "extend", "info", "help", "version"));
             // Add reload for admins
             if (player.hasPermission("rentabot.admin")) {
                 completions.add("reload");
             }
         } else if (args.length == 2) {
             String sub = args[0].toLowerCase();
-            if (sub.equals("stop") || sub.equals("tp") || sub.equals("rename") || 
-                sub.equals("extend") || sub.equals("info")) {
-                // Suggest player's bot names
-                completions.addAll(plugin.getBotManager().getPlayerBots(player.getUniqueId())
-                    .stream()
-                    .map(RentableBot::getInternalName)
-                    .collect(Collectors.toList()));
-            } else if (sub.equals("create")) {
-                // Suggest hour amounts
-                completions.addAll(Arrays.asList("1", "6", "12", "24", "48", "72", "168"));
+            switch (sub) {
+                case "stop" -> {
+                    // Only suggest ACTIVE bots for stop
+                    completions.addAll(plugin.getBotManager().getPlayerBots(player.getUniqueId())
+                        .stream()
+                        .filter(b -> b.getStatus() == BotStatus.ACTIVE)
+                        .map(RentableBot::getInternalName)
+                        .collect(Collectors.toList()));
+                }
+                case "resume" -> {
+                    // Only suggest STOPPED or EXPIRED bots for resume
+                    completions.addAll(plugin.getBotManager().getPlayerBots(player.getUniqueId())
+                        .stream()
+                        .filter(b -> b.getStatus() == BotStatus.STOPPED || b.getStatus() == BotStatus.EXPIRED)
+                        .map(RentableBot::getInternalName)
+                        .collect(Collectors.toList()));
+                }
+                case "delete" -> {
+                    // Suggest all bots for delete
+                    completions.addAll(plugin.getBotManager().getPlayerBots(player.getUniqueId())
+                        .stream()
+                        .map(RentableBot::getInternalName)
+                        .collect(Collectors.toList()));
+                }
+                case "tp", "rename", "extend", "info" -> {
+                    // Suggest all bot names
+                    completions.addAll(plugin.getBotManager().getPlayerBots(player.getUniqueId())
+                        .stream()
+                        .map(RentableBot::getInternalName)
+                        .collect(Collectors.toList()));
+                }
+                case "create" -> {
+                    // Suggest hour amounts
+                    completions.addAll(Arrays.asList("1", "6", "12", "24", "48", "72", "168"));
+                }
             }
         } else if (args.length == 3) {
-            if (args[0].equalsIgnoreCase("extend")) {
+            String sub = args[0].toLowerCase();
+            if (sub.equals("extend")) {
                 completions.addAll(Arrays.asList("1", "6", "12", "24"));
+            } else if (sub.equals("resume")) {
+                // Suggest hours for resume
+                completions.addAll(Arrays.asList("1", "6", "12", "24"));
+            } else if (sub.equals("delete")) {
+                completions.add("confirm");
             }
         }
         

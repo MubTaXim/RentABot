@@ -1,6 +1,7 @@
 package com.ximpify.rentabot.gui;
 
 import com.ximpify.rentabot.RentABot;
+import com.ximpify.rentabot.bot.BotStatus;
 import com.ximpify.rentabot.bot.RentableBot;
 import com.ximpify.rentabot.rental.RentalManager.RentalResult;
 import org.bukkit.Material;
@@ -40,7 +41,7 @@ public class GUIListener implements Listener {
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         
-        String title = event.getView().getTitle();
+        String title = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(event.getView().title());
         
         // Check if it's one of our GUIs
         if (!isRentABotGUI(title)) return;
@@ -67,6 +68,9 @@ public class GUIListener implements Listener {
         } else if (title.startsWith("§8§lExtend: ")) {
             String botName = title.replace("§8§lExtend: ", "");
             handleExtend(player, slot, clicked, botName);
+        } else if (title.startsWith("§8§lResume: ")) {
+            String botName = title.replace("§8§lResume: ", "");
+            handleResume(player, slot, clicked, botName);
         } else if (title.equals(GUIManager.CONFIRM_TITLE)) {
             handleConfirm(player, slot);
         }
@@ -78,6 +82,7 @@ public class GUIListener implements Listener {
                title.startsWith(GUIManager.BOT_MANAGE_TITLE) ||
                title.equals(GUIManager.SHOP_TITLE) ||
                title.startsWith("§8§lExtend: ") ||
+               title.startsWith("§8§lResume: ") ||
                title.equals(GUIManager.CONFIRM_TITLE);
     }
     
@@ -119,9 +124,9 @@ public class GUIListener implements Listener {
         
         // Bot head clicked
         if (clicked.getType() == Material.PLAYER_HEAD) {
-            String displayName = clicked.getItemMeta().getDisplayName();
-            // Extract bot name from "§a§lBotName" format
-            String botName = displayName.replace("§a§l", "");
+            String displayName = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(clicked.getItemMeta().displayName());
+            // Extract bot name from "BotName" format (plain text after serialization)
+            String botName = displayName;
             
             Optional<RentableBot> optBot = plugin.getBotManager().getBot(botName);
             if (optBot.isPresent()) {
@@ -140,42 +145,91 @@ public class GUIListener implements Listener {
         }
         
         RentableBot bot = optBot.get();
+        BotStatus status = bot.getStatus();
         
-        switch (slot) {
-            case 20 -> { // Teleport Here
-                player.closeInventory();
-                plugin.getMessageUtil().sendRaw(player, "&aSending TPAHere request to &f" + botName + "&a...");
-                player.performCommand("tpahere " + bot.getDisplayName());
-            }
-            case 22 -> { // Extend Rental
-                player.closeInventory();
-                guiManager.openExtendMenu(player, bot);
-            }
-            case 29 -> { // Rename
-                player.closeInventory();
-                renamingBot.put(player.getUniqueId(), botName);
-                plugin.getMessageUtil().sendRaw(player, "&eType the new name in chat:");
-                plugin.getMessageUtil().sendRaw(player, "&7Type &ccancel &7to cancel.");
-            }
-            case 31 -> { // Reconnect (if offline)
-                if (!bot.isConnected()) {
+        // Handle common back button
+        if (slot == 40) {
+            player.closeInventory();
+            guiManager.openMyBotsMenu(player);
+            return;
+        }
+        
+        // Handle based on bot status
+        if (status == BotStatus.ACTIVE) {
+            // Active bot buttons
+            switch (slot) {
+                case 20 -> { // Teleport Here
                     player.closeInventory();
-                    plugin.getMessageUtil().sendRaw(player, "&eAttempting to reconnect &f" + botName + "&e...");
-                    bot.reconnect();
+                    plugin.getMessageUtil().sendRaw(player, "&aSending TPAHere request to &f" + botName + "&a...");
+                    player.performCommand("tpahere " + bot.getDisplayName());
+                }
+                case 22 -> { // Extend Rental
+                    player.closeInventory();
+                    guiManager.openExtendMenu(player, bot);
+                }
+                case 29 -> { // Rename
+                    player.closeInventory();
+                    renamingBot.put(player.getUniqueId(), botName);
+                    plugin.getMessageUtil().sendRaw(player, "&eType the new name in chat:");
+                    plugin.getMessageUtil().sendRaw(player, "&7Type &ccancel &7to cancel.");
+                }
+                case 31 -> { // Reconnect (if offline)
+                    if (!bot.isConnected()) {
+                        player.closeInventory();
+                        plugin.getMessageUtil().sendRaw(player, "&eAttempting to reconnect &f" + botName + "&e...");
+                        bot.reconnect();
+                    }
+                }
+                case 33 -> { // Pause Bot
+                    player.closeInventory();
+                    guiManager.openConfirmMenu(player, "Pause Bot", botName, () -> {
+                        RentalResult result = plugin.getRentalManager().stopRental(player, botName, false);
+                        if (result.success()) {
+                            String timeLeft = plugin.getRentalManager().formatTime(bot.getRemainingSeconds());
+                            plugin.getMessageUtil().send(player, "stop.success", "bot", botName, "time", timeLeft);
+                        }
+                    });
                 }
             }
-            case 33 -> { // Stop Bot
-                player.closeInventory();
-                guiManager.openConfirmMenu(player, "Stop Bot", botName, () -> {
-                    RentalResult result = plugin.getRentalManager().stopRental(player, botName, false);
-                    if (result.success()) {
-                        plugin.getMessageUtil().send(player, "stop.success", "bot", botName);
+        } else {
+            // Stopped/Expired bot buttons
+            switch (slot) {
+                case 20 -> { // Resume Bot
+                    player.closeInventory();
+                    if (bot.hasTimeRemaining()) {
+                        // Free resume - just resume
+                        RentalResult result = plugin.getRentalManager().resumeRental(player, botName, 0);
+                        if (result.success()) {
+                            plugin.getMessageUtil().send(player, "resume.success", "bot", botName, 
+                                "time", plugin.getRentalManager().formatTime(bot.getRemainingSeconds()));
+                        } else {
+                            String messageKey = switch (result.messageKey()) {
+                                case "max-active-reached" -> "resume.max-active";
+                                case "already-active" -> "resume.already-active";
+                                default -> "resume." + result.messageKey();
+                            };
+                            plugin.getMessageUtil().send(player, messageKey, "bot", botName);
+                        }
+                    } else {
+                        // Need to buy hours - open shop for resume
+                        guiManager.openResumeHoursMenu(player, bot);
                     }
-                });
-            }
-            case 40 -> { // Back
-                player.closeInventory();
-                guiManager.openMyBotsMenu(player);
+                }
+                case 22 -> { // Rename
+                    player.closeInventory();
+                    renamingBot.put(player.getUniqueId(), botName);
+                    plugin.getMessageUtil().sendRaw(player, "&eType the new name in chat:");
+                    plugin.getMessageUtil().sendRaw(player, "&7Type &ccancel &7to cancel.");
+                }
+                case 33 -> { // Delete Bot
+                    player.closeInventory();
+                    guiManager.openConfirmMenu(player, "Delete Bot", botName, () -> {
+                        RentalResult result = plugin.getRentalManager().deleteRental(player, botName, false);
+                        if (result.success()) {
+                            plugin.getMessageUtil().send(player, "delete.success", "bot", botName);
+                        }
+                    });
+                }
             }
         }
     }
@@ -273,6 +327,55 @@ public class GUIListener implements Listener {
         }
     }
     
+    private void handleResume(Player player, int slot, ItemStack clicked, String botName) {
+        // Back button
+        if (slot == 31) {
+            Optional<RentableBot> optBot = plugin.getBotManager().getBot(botName);
+            if (optBot.isPresent()) {
+                player.closeInventory();
+                guiManager.openBotManageMenu(player, optBot.get());
+            }
+            return;
+        }
+        
+        // Resume hour buttons
+        int[] hours = {1, 6, 12, 24, 48};
+        int[] slots = {19, 20, 21, 22, 23};
+        
+        for (int i = 0; i < slots.length; i++) {
+            if (slot == slots[i]) {
+                int duration = hours[i];
+                
+                player.closeInventory();
+                guiManager.removePendingAction(player.getUniqueId());
+                
+                RentalResult result = plugin.getRentalManager().resumeRental(player, botName, duration);
+                
+                if (result.success()) {
+                    Optional<RentableBot> optBot = plugin.getBotManager().getBot(botName);
+                    String timeLeft = optBot.isPresent() 
+                        ? plugin.getRentalManager().formatTime(duration * 3600L)
+                        : duration + "h";
+                    plugin.getMessageUtil().send(player, "resume.success",
+                        "bot", botName,
+                        "time", timeLeft);
+                } else {
+                    String messageKey = switch (result.messageKey()) {
+                        case "max-active-reached" -> "resume.max-active";
+                        case "insufficient-funds" -> "economy.insufficient-funds";
+                        default -> "resume." + result.messageKey();
+                    };
+                    if (result.args() != null && result.args().length > 0) {
+                        plugin.getMessageUtil().send(player, messageKey, "price", result.args()[0]);
+                    } else {
+                        plugin.getMessageUtil().send(player, messageKey, "bot", botName);
+                    }
+                }
+                return;
+            }
+        }
+    }
+    
     private void handleConfirm(Player player, int slot) {
         GUIManager.PendingAction action = guiManager.getPendingAction(player.getUniqueId());
         if (action == null) {
@@ -297,8 +400,8 @@ public class GUIListener implements Listener {
         
         // Clean up pending actions after a delay (in case reopening)
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (player.getOpenInventory().getTitle() == null || 
-                !isRentABotGUI(player.getOpenInventory().getTitle())) {
+            String currentTitle = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(player.getOpenInventory().title());
+            if (currentTitle == null || currentTitle.isEmpty() || !isRentABotGUI(currentTitle)) {
                 guiManager.removePendingAction(player.getUniqueId());
             }
         }, 5L);

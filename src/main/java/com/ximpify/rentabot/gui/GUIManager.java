@@ -1,6 +1,7 @@
 package com.ximpify.rentabot.gui;
 
 import com.ximpify.rentabot.RentABot;
+import com.ximpify.rentabot.bot.BotStatus;
 import com.ximpify.rentabot.bot.RentableBot;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -41,19 +42,22 @@ public class GUIManager {
      * Opens the main menu for a player.
      */
     public void openMainMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 27, MAIN_MENU_TITLE);
+        Inventory inv = Bukkit.createInventory(null, 27, net.kyori.adventure.text.Component.text(MAIN_MENU_TITLE));
         
         // Fill background
         fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
         
         // My Bots button (slot 11)
-        int botCount = plugin.getBotManager().getPlayerBotCount(player.getUniqueId());
-        int maxBots = plugin.getConfig().getInt("limits.max-bots-per-player", 3);
+        int activeCount = plugin.getBotManager().getPlayerActiveBotCount(player.getUniqueId());
+        int reservedCount = plugin.getBotManager().getPlayerReservedBotCount(player.getUniqueId());
+        int maxActive = plugin.getConfig().getInt("limits.max-active-bots", 3);
+        int maxReserved = plugin.getConfig().getInt("limits.max-reserved-bots", 5);
         inv.setItem(11, createItem(Material.PLAYER_HEAD, 
             "§a§lMy Bots",
             "§7View and manage your bots",
             "",
-            "§7Active Bots: §f" + botCount + "§7/§f" + maxBots,
+            "§7Active: §a" + activeCount + "§7/§f" + maxActive,
+            "§7Reserved: §e" + reservedCount + "§7/§f" + maxReserved,
             "",
             "§e▶ Click to view"
         ));
@@ -79,7 +83,7 @@ public class GUIManager {
             "§7View your rental stats",
             "",
             "§7Total Bots Created: §f" + getPlayerTotalBots(player),
-            "§7Currently Active: §f" + botCount,
+            "§7Currently Active: §f" + activeCount,
             "",
             "§e▶ Click to view"
         ));
@@ -114,7 +118,7 @@ public class GUIManager {
         
         // Calculate inventory size (min 27, max 54)
         int size = Math.min(54, Math.max(27, ((bots.size() / 7) + 1) * 9 + 18));
-        Inventory inv = Bukkit.createInventory(null, size, MY_BOTS_TITLE);
+        Inventory inv = Bukkit.createInventory(null, size, net.kyori.adventure.text.Component.text(MY_BOTS_TITLE));
         
         // Fill background
         fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
@@ -125,15 +129,37 @@ public class GUIManager {
             if (slot % 9 == 8) slot += 2; // Skip edges
             if (slot >= size - 9) break; // Leave room for navigation
             
-            Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
-            String timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
+            // Calculate time based on status
+            String timeLeft;
+            String statusLine;
             
-            String status = bot.isConnected() ? "§a● Online" : "§c● Offline";
+            switch (bot.getStatus()) {
+                case ACTIVE -> {
+                    Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
+                    timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
+                    statusLine = bot.isConnected() ? "§a● ACTIVE (Online)" : "§a● ACTIVE (Offline)";
+                }
+                case STOPPED -> {
+                    timeLeft = plugin.getRentalManager().formatTime(bot.getRemainingSeconds());
+                    statusLine = "§e● PAUSED";
+                }
+                case EXPIRED -> {
+                    timeLeft = "0s";
+                    statusLine = "§c● EXPIRED";
+                }
+                default -> {
+                    timeLeft = "?";
+                    statusLine = "§7● UNKNOWN";
+                }
+            }
+            
             String health = String.format("%.1f", bot.getHealth());
             
             List<String> lore = new ArrayList<>();
-            lore.add("§7Status: " + status);
-            lore.add("§7Health: §c" + health + " ❤");
+            lore.add("§7Status: " + statusLine);
+            if (bot.getStatus() == BotStatus.ACTIVE) {
+                lore.add("§7Health: §c" + health + " ❤");
+            }
             lore.add("§7Time Left: §e" + timeLeft);
             lore.add("");
             if (bot.hasSpawnPoint()) {
@@ -149,6 +175,7 @@ public class GUIManager {
                 lore.toArray(new String[0])
             );
             
+            // Add status indicator glass pane next to bot if space allows
             inv.setItem(slot, botItem);
             slot++;
         }
@@ -176,26 +203,49 @@ public class GUIManager {
      * Opens the bot management menu for a specific bot.
      */
     public void openBotManageMenu(Player player, RentableBot bot) {
-        Inventory inv = Bukkit.createInventory(null, 45, BOT_MANAGE_TITLE + bot.getInternalName());
+        Inventory inv = Bukkit.createInventory(null, 45, net.kyori.adventure.text.Component.text(BOT_MANAGE_TITLE + bot.getInternalName()));
         
         // Fill background
         fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
         
         // Bot info head (slot 4)
-        Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
-        String timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
-        String status = bot.isConnected() ? "§a● Online" : "§c● Offline";
+        String timeLeft;
+        String statusLine;
+        
+        switch (bot.getStatus()) {
+            case ACTIVE -> {
+                Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
+                timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
+                statusLine = bot.isConnected() ? "§a● ACTIVE (Online)" : "§a● ACTIVE (Offline)";
+            }
+            case STOPPED -> {
+                timeLeft = plugin.getRentalManager().formatTime(bot.getRemainingSeconds());
+                statusLine = "§e● PAUSED";
+            }
+            case EXPIRED -> {
+                timeLeft = "0s";
+                statusLine = "§c● EXPIRED";
+            }
+            default -> {
+                timeLeft = "?";
+                statusLine = "§7● UNKNOWN";
+            }
+        }
         
         List<String> infoLore = new ArrayList<>();
         infoLore.add("");
-        infoLore.add("§7Status: " + status);
-        infoLore.add("§7Health: §c" + String.format("%.1f", bot.getHealth()) + " ❤");
-        infoLore.add("§7Food: §e" + bot.getFood() + " 🍖");
+        infoLore.add("§7Status: " + statusLine);
+        if (bot.getStatus() == BotStatus.ACTIVE) {
+            infoLore.add("§7Health: §c" + String.format("%.1f", bot.getHealth()) + " ❤");
+            infoLore.add("§7Food: §e" + bot.getFood() + " 🍖");
+        }
         infoLore.add("");
         infoLore.add("§7Time Remaining: §e" + timeLeft);
-        infoLore.add("§7Uptime: §f" + bot.getUptime());
+        if (bot.getStatus() == BotStatus.ACTIVE) {
+            infoLore.add("§7Uptime: §f" + bot.getUptime());
+        }
         infoLore.add("");
-        if (bot.isPositionInitialized()) {
+        if (bot.isPositionInitialized() && bot.getStatus() == BotStatus.ACTIVE) {
             infoLore.add("§7Position:");
             infoLore.add("§8  X: §f" + String.format("%.1f", bot.getX()));
             infoLore.add("§8  Y: §f" + String.format("%.1f", bot.getY()));
@@ -207,95 +257,174 @@ public class GUIManager {
             infoLore.toArray(new String[0])
         ));
         
-        // Teleport Here button (slot 20)
-        inv.setItem(20, createItem(Material.ENDER_PEARL,
-            "§b§lTeleport to Me",
-            "§7Teleport this bot to your location",
-            "",
-            "§7This will send a TPAHere request",
-            "§7and the bot will accept it.",
-            "",
-            "§e▶ Click to teleport"
-        ));
-        
-        // Extend Rental button (slot 22)
-        double extendPrice = plugin.getConfig().getDouble("economy.price-per-hour", 5000);
-        inv.setItem(22, createItem(Material.CLOCK,
-            "§e§lExtend Rental",
-            "§7Add more time to this bot",
-            "",
-            "§7Price: §f" + (plugin.isEconomyEnabled() 
-                ? plugin.getEconomyHandler().formatMoney(extendPrice) + "/hour"
-                : "Free"),
-            "",
-            "§e▶ Click to extend"
-        ));
-        
-        // Spawn Point Info (slot 24)
-        if (bot.hasSpawnPoint()) {
-            inv.setItem(24, createItem(Material.RESPAWN_ANCHOR,
-                "§a§lSpawn Point",
-                "§7Bot will return here after death",
+        // Different buttons based on bot status
+        if (bot.getStatus() == BotStatus.ACTIVE) {
+            // Active bot management buttons
+            
+            // Teleport Here button (slot 20)
+            inv.setItem(20, createItem(Material.ENDER_PEARL,
+                "§b§lTeleport to Me",
+                "§7Teleport this bot to your location",
                 "",
-                "§7Location:",
-                "§8  World: §f" + (bot.getSavedWorld() != null ? bot.getSavedWorld() : "Unknown"),
-                "§8  X: §f" + String.format("%.1f", bot.getSavedX()),
-                "§8  Y: §f" + String.format("%.1f", bot.getSavedY()),
-                "§8  Z: §f" + String.format("%.1f", bot.getSavedZ()),
+                "§7This will send a TPAHere request",
+                "§7and the bot will accept it.",
                 "",
-                "§7Status: §a✓ Active"
+                "§e▶ Click to teleport"
             ));
-        } else {
-            inv.setItem(24, createItem(Material.GRAY_BED,
-                "§c§lNo Spawn Point",
-                "§7Bot has no saved location",
+            
+            // Extend Rental button (slot 22)
+            double extendPrice = plugin.getConfig().getDouble("economy.price-per-hour", 5000);
+            inv.setItem(22, createItem(Material.CLOCK,
+                "§e§lExtend Rental",
+                "§7Add more time to this bot",
                 "",
-                "§7Use §f/tpahere " + bot.getInternalName(),
-                "§7to set the spawn point.",
+                "§7Price: §f" + (plugin.isEconomyEnabled() 
+                    ? plugin.getEconomyHandler().formatMoney(extendPrice) + "/hour"
+                    : "Free"),
                 "",
-                "§7Status: §c✗ Not Set"
+                "§e▶ Click to extend"
+            ));
+            
+            // Spawn Point Info (slot 24)
+            if (bot.hasSpawnPoint()) {
+                inv.setItem(24, createItem(Material.RESPAWN_ANCHOR,
+                    "§a§lSpawn Point",
+                    "§7Bot will return here after death",
+                    "",
+                    "§7Location:",
+                    "§8  World: §f" + (bot.getSavedWorld() != null ? bot.getSavedWorld() : "Unknown"),
+                    "§8  X: §f" + String.format("%.1f", bot.getSavedX()),
+                    "§8  Y: §f" + String.format("%.1f", bot.getSavedY()),
+                    "§8  Z: §f" + String.format("%.1f", bot.getSavedZ()),
+                    "",
+                    "§7Status: §a✓ Active"
+                ));
+            } else {
+                inv.setItem(24, createItem(Material.GRAY_BED,
+                    "§c§lNo Spawn Point",
+                    "§7Bot has no saved location",
+                    "",
+                    "§7Use §f/tpahere " + bot.getInternalName(),
+                    "§7to set the spawn point.",
+                    "",
+                    "§7Status: §c✗ Not Set"
+                ));
+            }
+            
+            // Rename button (slot 29)
+            inv.setItem(29, createItem(Material.NAME_TAG,
+                "§6§lRename Bot",
+                "§7Change this bot's name",
+                "",
+                "§7Current: §f" + bot.getInternalName(),
+                "",
+                "§e▶ Click to rename"
+            ));
+            
+            // Reconnect button (slot 31) - only if disconnected
+            if (!bot.isConnected()) {
+                inv.setItem(31, createItem(Material.REDSTONE,
+                    "§e§lReconnect",
+                    "§7Force reconnect this bot",
+                    "",
+                    "§cBot is currently offline",
+                    "",
+                    "§e▶ Click to reconnect"
+                ));
+            } else {
+                inv.setItem(31, createItem(Material.LIME_DYE,
+                    "§a§lConnected",
+                    "§7Bot is online and working",
+                    "",
+                    "§aNo action needed"
+                ));
+            }
+            
+            // Pause Bot button (slot 33)
+            inv.setItem(33, createItem(Material.ORANGE_DYE,
+                "§e§lPause Bot",
+                "§7Pause this bot (saves time)",
+                "",
+                "§7Time will be frozen and saved.",
+                "§7You can resume anytime.",
+                "",
+                "§e▶ Click to pause"
+            ));
+            
+        } else if (bot.getStatus() == BotStatus.STOPPED || bot.getStatus() == BotStatus.EXPIRED) {
+            // Stopped/Expired bot management buttons
+            
+            // Resume button (slot 20)
+            boolean hasTime = bot.hasTimeRemaining();
+            if (hasTime) {
+                inv.setItem(20, createItem(Material.LIME_DYE,
+                    "§a§lResume Bot",
+                    "§7Continue your rental",
+                    "",
+                    "§7Time Remaining: §e" + timeLeft,
+                    "§7Cost: §aFREE",
+                    "",
+                    "§a▶ Click to resume"
+                ));
+            } else {
+                double resumePrice = plugin.getConfig().getDouble("economy.price-per-hour", 5000);
+                inv.setItem(20, createItem(Material.GOLD_INGOT,
+                    "§e§lResume with Hours",
+                    "§7Add time to resume the bot",
+                    "",
+                    "§cBot has no time remaining!",
+                    "§7Price: §f" + (plugin.isEconomyEnabled() 
+                        ? plugin.getEconomyHandler().formatMoney(resumePrice) + "/hour"
+                        : "Free"),
+                    "",
+                    "§e▶ Click to buy hours"
+                ));
+            }
+            
+            // Rename button (slot 22)
+            inv.setItem(22, createItem(Material.NAME_TAG,
+                "§6§lRename Bot",
+                "§7Change this bot's name",
+                "",
+                "§7Current: §f" + bot.getInternalName(),
+                "",
+                "§e▶ Click to rename"
+            ));
+            
+            // Spawn Point Info (slot 24)
+            if (bot.hasSpawnPoint()) {
+                inv.setItem(24, createItem(Material.RESPAWN_ANCHOR,
+                    "§a§lSpawn Point",
+                    "§7Bot will spawn here when resumed",
+                    "",
+                    "§7Location:",
+                    "§8  World: §f" + (bot.getSavedWorld() != null ? bot.getSavedWorld() : "Unknown"),
+                    "§8  X: §f" + String.format("%.1f", bot.getSavedX()),
+                    "§8  Y: §f" + String.format("%.1f", bot.getSavedY()),
+                    "§8  Z: §f" + String.format("%.1f", bot.getSavedZ()),
+                    "",
+                    "§7Status: §a✓ Saved"
+                ));
+            } else {
+                inv.setItem(24, createItem(Material.GRAY_BED,
+                    "§c§lNo Spawn Point",
+                    "§7Bot has no saved location",
+                    "",
+                    "§7You can set it after resuming."
+                ));
+            }
+            
+            // Delete Bot button (slot 33)
+            inv.setItem(33, createItem(Material.TNT,
+                "§c§lDelete Bot",
+                "§7Permanently delete this bot",
+                "",
+                "§c⚠ This cannot be undone!",
+                "§cAll saved data will be lost.",
+                "",
+                "§c▶ Click to delete"
             ));
         }
-        
-        // Rename button (slot 29)
-        inv.setItem(29, createItem(Material.NAME_TAG,
-            "§6§lRename Bot",
-            "§7Change this bot's name",
-            "",
-            "§7Current: §f" + bot.getInternalName(),
-            "",
-            "§e▶ Click to rename"
-        ));
-        
-        // Reconnect button (slot 31) - only if disconnected
-        if (!bot.isConnected()) {
-            inv.setItem(31, createItem(Material.REDSTONE,
-                "§e§lReconnect",
-                "§7Force reconnect this bot",
-                "",
-                "§cBot is currently offline",
-                "",
-                "§e▶ Click to reconnect"
-            ));
-        } else {
-            inv.setItem(31, createItem(Material.LIME_DYE,
-                "§a§lConnected",
-                "§7Bot is online and working",
-                "",
-                "§aNo action needed"
-            ));
-        }
-        
-        // Stop Bot button (slot 33)
-        inv.setItem(33, createItem(Material.TNT,
-            "§c§lStop Bot",
-            "§7Permanently stop this bot",
-            "",
-            "§cThis will end the rental!",
-            "§7Refund: §e" + plugin.getConfig().getInt("economy.refund-percentage", 50) + "%",
-            "",
-            "§c▶ Click to stop"
-        ));
         
         // Back button (slot 40)
         inv.setItem(40, createItem(Material.ARROW,
@@ -310,7 +439,7 @@ public class GUIManager {
      * Opens the shop/duration selection menu.
      */
     public void openShopMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 45, SHOP_TITLE);
+        Inventory inv = Bukkit.createInventory(null, 45, net.kyori.adventure.text.Component.text(SHOP_TITLE));
         
         // Fill background
         fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
@@ -380,7 +509,7 @@ public class GUIManager {
      * Opens the extend rental menu.
      */
     public void openExtendMenu(Player player, RentableBot bot) {
-        Inventory inv = Bukkit.createInventory(null, 36, "§8§lExtend: " + bot.getInternalName());
+        Inventory inv = Bukkit.createInventory(null, 36, net.kyori.adventure.text.Component.text("§8§lExtend: " + bot.getInternalName()));
         
         // Fill background
         fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
@@ -431,10 +560,64 @@ public class GUIManager {
     }
     
     /**
+     * Opens the resume hours selection menu for expired/stopped bots without time.
+     */
+    public void openResumeHoursMenu(Player player, RentableBot bot) {
+        Inventory inv = Bukkit.createInventory(null, 36, net.kyori.adventure.text.Component.text("§8§lResume: " + bot.getInternalName()));
+        
+        // Fill background
+        fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
+        
+        // Info
+        inv.setItem(4, createItem(Material.CLOCK,
+            "§e§lResume Bot",
+            "§cBot has no time remaining!",
+            "",
+            "§7Select rental hours to resume:"
+        ));
+        
+        // Hour options
+        int[] hours = {1, 6, 12, 24, 48};
+        String[] names = {"1 Hour", "6 Hours", "12 Hours", "1 Day", "2 Days"};
+        int[] slots = {19, 20, 21, 22, 23};
+        
+        for (int i = 0; i < hours.length; i++) {
+            double price = calculatePrice(hours[i]);
+            String priceStr = plugin.isEconomyEnabled() 
+                ? plugin.getEconomyHandler().formatMoney(price)
+                : "Free";
+            
+            boolean canAfford = !plugin.isEconomyEnabled() || 
+                plugin.getEconomyHandler().hasBalance(player, price);
+            
+            inv.setItem(slots[i], createItem(Material.EXPERIENCE_BOTTLE,
+                (canAfford ? "§a" : "§c") + "§l" + names[i],
+                "§7Resume with " + hours[i] + " hour(s)",
+                "",
+                "§7Price: §f" + priceStr,
+                canAfford ? "§a✓ Can afford" : "§c✗ Not enough money",
+                "",
+                canAfford ? "§e▶ Click to resume" : "§c▶ Insufficient funds"
+            ));
+        }
+        
+        // Store bot name for handler
+        pendingActions.put(player.getUniqueId(), new PendingAction("resume", bot.getInternalName(), null));
+        
+        // Back button
+        inv.setItem(31, createItem(Material.ARROW,
+            "§7§lBack",
+            "§7Return to bot management"
+        ));
+        
+        player.openInventory(inv);
+    }
+    
+    /**
      * Opens a confirmation dialog.
      */
     public void openConfirmMenu(Player player, String action, String target, Runnable onConfirm) {
-        Inventory inv = Bukkit.createInventory(null, 27, CONFIRM_TITLE);
+        Inventory inv = Bukkit.createInventory(null, 27, net.kyori.adventure.text.Component.text(CONFIRM_TITLE));
         
         // Fill background
         fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
@@ -477,9 +660,9 @@ public class GUIManager {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(name);
+            meta.displayName(net.kyori.adventure.text.Component.text(name));
             if (lore.length > 0) {
-                meta.setLore(Arrays.asList(lore));
+                meta.lore(Arrays.stream(lore).map(net.kyori.adventure.text.Component::text).toList());
             }
             item.setItemMeta(meta);
         }
@@ -491,9 +674,9 @@ public class GUIManager {
         SkullMeta meta = (SkullMeta) item.getItemMeta();
         if (meta != null) {
             meta.setOwningPlayer(Bukkit.getOfflinePlayer(playerName));
-            meta.setDisplayName(displayName);
+            meta.displayName(net.kyori.adventure.text.Component.text(displayName));
             if (lore.length > 0) {
-                meta.setLore(Arrays.asList(lore));
+                meta.lore(Arrays.stream(lore).map(net.kyori.adventure.text.Component::text).toList());
             }
             item.setItemMeta(meta);
         }

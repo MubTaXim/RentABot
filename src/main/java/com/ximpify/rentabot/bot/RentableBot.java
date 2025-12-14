@@ -78,6 +78,11 @@ public class RentableBot {
     // Connection tracking
     private Instant connectedAt;
     
+    // Bot lifecycle status
+    private BotStatus status;
+    private long remainingSeconds; // Remaining time when stopped/paused
+    private Instant lastActiveAt;  // Last time bot was active (for cleanup)
+    
     public RentableBot(RentABot plugin, String displayName, String internalName, 
                        UUID ownerUUID, String ownerName, int hours) {
         this.plugin = plugin;
@@ -95,6 +100,9 @@ public class RentableBot {
         this.health = 20.0f;
         this.food = 20;
         this.hasSpawnPoint = false;
+        this.status = BotStatus.ACTIVE;
+        this.remainingSeconds = hours * 3600L;
+        this.lastActiveAt = Instant.now();
     }
     
     /**
@@ -460,13 +468,6 @@ public class RentableBot {
      */
     public void denyTPA() {
         sendCommand("tpdeny");
-    }
-    
-    /**
-     * Extends the rental duration.
-     */
-    public void extendRental(int hours) {
-        this.expiresAt = expiresAt.plusSeconds(hours * 3600L);
     }
     
     // Session listener for handling packets
@@ -884,5 +885,169 @@ public class RentableBot {
         if (seconds < 60) return seconds + "s";
         if (seconds < 3600) return (seconds / 60) + "m " + (seconds % 60) + "s";
         return (seconds / 3600) + "h " + ((seconds % 3600) / 60) + "m";
+    }
+    
+    // ==================== Status & Lifecycle Methods ====================
+    
+    /**
+     * Gets the current bot status.
+     */
+    public BotStatus getStatus() {
+        return status;
+    }
+    
+    /**
+     * Sets the bot status.
+     */
+    public void setStatus(BotStatus status) {
+        this.status = status;
+        if (status == BotStatus.ACTIVE) {
+            this.lastActiveAt = Instant.now();
+        }
+    }
+    
+    /**
+     * Gets the remaining seconds when bot was stopped.
+     */
+    public long getRemainingSeconds() {
+        // If active, calculate from expiry time
+        if (status == BotStatus.ACTIVE) {
+            long remaining = java.time.Duration.between(Instant.now(), expiresAt).toSeconds();
+            return Math.max(0, remaining);
+        }
+        // If stopped/expired, return stored value
+        return remainingSeconds;
+    }
+    
+    /**
+     * Sets the remaining seconds (used when loading from DB or stopping).
+     */
+    public void setRemainingSeconds(long seconds) {
+        this.remainingSeconds = Math.max(0, seconds);
+    }
+    
+    /**
+     * Gets the last active timestamp.
+     */
+    public Instant getLastActiveAt() {
+        return lastActiveAt;
+    }
+    
+    /**
+     * Sets the last active timestamp.
+     */
+    public void setLastActiveAt(Instant lastActiveAt) {
+        this.lastActiveAt = lastActiveAt;
+    }
+    
+    /**
+     * Stops the bot and freezes time.
+     * Time remaining is saved for later resumption.
+     */
+    public void stopAndFreeze() {
+        // Calculate remaining time before disconnecting
+        long remaining = java.time.Duration.between(Instant.now(), expiresAt).toSeconds();
+        this.remainingSeconds = Math.max(0, remaining);
+        this.status = BotStatus.STOPPED;
+        this.lastActiveAt = Instant.now();
+        
+        // Disconnect the bot
+        disconnect("Rental paused");
+        
+        plugin.debug("Bot '" + internalName + "' stopped with " + remainingSeconds + " seconds remaining");
+    }
+    
+    /**
+     * Marks the bot as expired (time ran out).
+     */
+    public void markExpired() {
+        this.status = BotStatus.EXPIRED;
+        this.remainingSeconds = 0;
+        this.lastActiveAt = Instant.now();
+        
+        // Disconnect the bot
+        disconnect("Rental expired");
+        
+        plugin.debug("Bot '" + internalName + "' expired");
+    }
+    
+    /**
+     * Resumes a stopped bot with its remaining time.
+     * @return true if resumed successfully
+     */
+    public boolean resume() {
+        if (status != BotStatus.STOPPED || remainingSeconds <= 0) {
+            return false;
+        }
+        
+        // Set new expiry based on remaining time
+        this.expiresAt = Instant.now().plusSeconds(remainingSeconds);
+        this.status = BotStatus.ACTIVE;
+        this.lastActiveAt = Instant.now();
+        
+        // Reset reconnect state
+        resetForReconnect();
+        
+        plugin.debug("Bot '" + internalName + "' resuming with " + remainingSeconds + " seconds");
+        return connect();
+    }
+    
+    /**
+     * Resumes an expired bot with new hours.
+     * @param hours New hours to add
+     * @return true if resumed successfully
+     */
+    public boolean resumeWithHours(int hours) {
+        // Set new expiry with new hours
+        this.expiresAt = Instant.now().plusSeconds(hours * 3600L);
+        this.remainingSeconds = hours * 3600L;
+        this.status = BotStatus.ACTIVE;
+        this.lastActiveAt = Instant.now();
+        
+        // Reset reconnect state
+        resetForReconnect();
+        
+        plugin.debug("Bot '" + internalName + "' resuming with " + hours + " new hours");
+        return connect();
+    }
+    
+    /**
+     * Extends the rental by adding more hours.
+     */
+    public void extendRental(int hours) {
+        if (status == BotStatus.ACTIVE) {
+            // Active bot - extend from current expiry
+            this.expiresAt = expiresAt.plusSeconds(hours * 3600L);
+        } else if (status == BotStatus.STOPPED) {
+            // Stopped bot - add to remaining seconds
+            this.remainingSeconds += hours * 3600L;
+        } else if (status == BotStatus.EXPIRED) {
+            // Expired bot - set new time
+            this.remainingSeconds = hours * 3600L;
+        }
+    }
+    
+    /**
+     * Check if bot has time remaining (for stopped bots).
+     */
+    public boolean hasTimeRemaining() {
+        if (status == BotStatus.ACTIVE) {
+            return Instant.now().isBefore(expiresAt);
+        }
+        return remainingSeconds > 0;
+    }
+    
+    /**
+     * Check if this bot is taking an active slot (connected/active).
+     */
+    public boolean isActiveSlot() {
+        return status == BotStatus.ACTIVE;
+    }
+    
+    /**
+     * Check if this bot is in a reserved slot (stopped/expired).
+     */
+    public boolean isReservedSlot() {
+        return status == BotStatus.STOPPED || status == BotStatus.EXPIRED;
     }
 }

@@ -1,6 +1,7 @@
 package com.ximpify.rentabot.rental;
 
 import com.ximpify.rentabot.RentABot;
+import com.ximpify.rentabot.bot.BotStatus;
 import com.ximpify.rentabot.bot.RentableBot;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -47,25 +48,38 @@ public class RentalManager {
             return new RentalResult(false, "invalid-hours", String.valueOf(minHours), String.valueOf(maxHours));
         }
         
-        // Check bot limit
+        // Check ACTIVE bot limit
         if (!player.hasPermission("rentabot.bypass.limit")) {
-            int maxBots = plugin.getConfig().getInt("limits.max-bots-per-player", 3);
-            int currentBots = plugin.getBotManager().getPlayerBotCount(playerUUID);
-            if (maxBots > 0 && currentBots >= maxBots) {
+            int maxActiveBots = plugin.getConfig().getInt("limits.max-active-bots", 3);
+            int currentActiveBots = plugin.getBotManager().getPlayerActiveBotCount(playerUUID);
+            if (maxActiveBots > 0 && currentActiveBots >= maxActiveBots) {
                 return new RentalResult(false, "limit-reached", 
-                    String.valueOf(currentBots), String.valueOf(maxBots));
+                    String.valueOf(currentActiveBots), String.valueOf(maxActiveBots));
             }
         }
         
-        // Check server limit
+        // Check server-wide active limit
         int maxTotal = plugin.getConfig().getInt("limits.max-total-bots", 50);
         if (maxTotal > 0 && plugin.getBotManager().getTotalBotCount() >= maxTotal) {
             return new RentalResult(false, "server-limit");
         }
         
-        // Check name availability
+        // Check name availability (includes reserved bots)
         if (!plugin.getBotManager().isNameAvailable(botName)) {
             return new RentalResult(false, "name-taken");
+        }
+        
+        // Check reserved bot limit (for total bots owned)
+        if (!player.hasPermission("rentabot.bypass.limit")) {
+            int maxReserved = plugin.getConfig().getInt("limits.max-reserved-bots", 5);
+            int currentReserved = plugin.getBotManager().getPlayerReservedBotCount(playerUUID);
+            int currentActive = plugin.getBotManager().getPlayerActiveBotCount(playerUUID);
+            int totalOwned = currentReserved + currentActive;
+            int maxTotalOwned = plugin.getConfig().getInt("limits.max-active-bots", 3) + maxReserved;
+            if (maxReserved > 0 && totalOwned >= maxTotalOwned) {
+                return new RentalResult(false, "total-limit-reached", 
+                    String.valueOf(totalOwned), String.valueOf(maxTotalOwned));
+            }
         }
         
         // Validate name
@@ -113,9 +127,40 @@ public class RentalManager {
     }
     
     /**
-     * Stops a rental.
+     * Stops (pauses) a rental. Time is frozen and bot can be resumed later.
      */
     public RentalResult stopRental(Player player, String botName, boolean isAdmin) {
+        Optional<RentableBot> optBot = plugin.getBotManager().getBot(botName);
+        if (optBot.isEmpty()) {
+            return new RentalResult(false, "not-found");
+        }
+        
+        RentableBot bot = optBot.get();
+        
+        // Check if already stopped
+        if (bot.getStatus() != BotStatus.ACTIVE) {
+            return new RentalResult(false, "already-stopped");
+        }
+        
+        // Check ownership (unless admin)
+        if (!isAdmin && !bot.getOwnerUUID().equals(player.getUniqueId())) {
+            return new RentalResult(false, "not-owner");
+        }
+        
+        // Stop the bot (time is frozen, no refund needed)
+        plugin.getBotManager().stopBot(botName);
+        
+        // Save to storage (with STOPPED status and remaining time)
+        plugin.getStorageManager().saveRental(bot);
+        
+        String timeRemaining = formatTime(bot.getRemainingSeconds());
+        return new RentalResult(true, "stopped", botName, timeRemaining);
+    }
+    
+    /**
+     * Permanently deletes a rental.
+     */
+    public RentalResult deleteRental(Player player, String botName, boolean isAdmin) {
         Optional<RentableBot> optBot = plugin.getBotManager().getBot(botName);
         if (optBot.isEmpty()) {
             return new RentalResult(false, "not-found");
@@ -128,27 +173,100 @@ public class RentalManager {
             return new RentalResult(false, "not-owner");
         }
         
-        // Calculate refund
-        double refund = 0;
-        if (plugin.isEconomyEnabled()) {
-            int refundPercent = plugin.getConfig().getInt("economy.refund-percentage", 50);
-            if (refundPercent > 0) {
-                Duration remaining = Duration.between(Instant.now(), bot.getExpiresAt());
-                if (!remaining.isNegative()) {
-                    double hoursRemaining = remaining.toMinutes() / 60.0;
-                    double pricePerHour = plugin.getConfig().getDouble("economy.price-per-hour", 5000);
-                    refund = (hoursRemaining * pricePerHour * refundPercent) / 100;
-                    plugin.getEconomyHandler().deposit(player, refund);
-                }
+        // Delete the bot permanently
+        plugin.getBotManager().deleteBot(botName);
+        plugin.getStorageManager().deleteRental(botName);
+        
+        return new RentalResult(true, "deleted", botName);
+    }
+    
+    /**
+     * Resumes a stopped bot.
+     */
+    public RentalResult resumeRental(Player player, String botName, int additionalHours) {
+        Optional<RentableBot> optBot = plugin.getBotManager().getBot(botName);
+        if (optBot.isEmpty()) {
+            return new RentalResult(false, "not-found");
+        }
+        
+        RentableBot bot = optBot.get();
+        
+        // Check ownership
+        if (!bot.getOwnerUUID().equals(player.getUniqueId())) {
+            return new RentalResult(false, "not-owner");
+        }
+        
+        // Check if can be resumed
+        if (bot.getStatus() == BotStatus.ACTIVE) {
+            return new RentalResult(false, "already-active");
+        }
+        
+        // Check active bot limit before resuming
+        if (!player.hasPermission("rentabot.bypass.limit")) {
+            int maxActiveBots = plugin.getConfig().getInt("limits.max-active-bots", 3);
+            int currentActiveBots = plugin.getBotManager().getPlayerActiveBotCount(player.getUniqueId());
+            if (maxActiveBots > 0 && currentActiveBots >= maxActiveBots) {
+                return new RentalResult(false, "max-active-reached", 
+                    String.valueOf(currentActiveBots), String.valueOf(maxActiveBots));
             }
         }
         
-        // Stop the bot
-        plugin.getBotManager().stopBot(botName);
-        plugin.getStorageManager().deleteRental(botName);
+        // Check server-wide active limit
+        int maxTotal = plugin.getConfig().getInt("limits.max-total-bots", 50);
+        if (maxTotal > 0 && plugin.getBotManager().getTotalBotCount() >= maxTotal) {
+            return new RentalResult(false, "server-limit");
+        }
         
-        return new RentalResult(true, "stopped", botName, 
-            plugin.isEconomyEnabled() ? plugin.getEconomyHandler().formatMoney(refund) : "0");
+        // Handle based on whether bot has time remaining
+        if (bot.getStatus() == BotStatus.STOPPED && bot.hasTimeRemaining()) {
+            // Resume with existing time (free)
+            if (plugin.getBotManager().resumeBot(botName)) {
+                plugin.getStorageManager().saveRental(bot);
+                String timeRemaining = formatTime(bot.getRemainingSeconds());
+                return new RentalResult(true, "resumed", botName, timeRemaining);
+            }
+            return new RentalResult(false, "resume-failed");
+        } else {
+            // Expired or no time - need to pay for new hours
+            if (additionalHours <= 0) {
+                return new RentalResult(false, "no-time", botName);
+            }
+            
+            // Check hours validity
+            int minHours = plugin.getConfig().getInt("economy.min-hours", 1);
+            int maxHours = plugin.getConfig().getInt("economy.max-hours", 168);
+            if (additionalHours < minHours || additionalHours > maxHours) {
+                return new RentalResult(false, "invalid-hours", String.valueOf(minHours), String.valueOf(maxHours));
+            }
+            
+            // Check economy
+            if (plugin.isEconomyEnabled()) {
+                double price = calculatePrice(additionalHours);
+                if (!plugin.getEconomyHandler().hasBalance(player, price)) {
+                    String balance = plugin.getEconomyHandler().formatMoney(
+                        plugin.getEconomyHandler().getBalance(player));
+                    String priceStr = plugin.getEconomyHandler().formatMoney(price);
+                    return new RentalResult(false, "not-enough-money", priceStr, balance);
+                }
+                plugin.getEconomyHandler().withdraw(player, price);
+            }
+            
+            // Resume with new hours
+            if (plugin.getBotManager().resumeBotWithHours(botName, additionalHours)) {
+                plugin.getStorageManager().saveRental(bot);
+                String priceStr = plugin.isEconomyEnabled() 
+                    ? plugin.getEconomyHandler().formatMoney(calculatePrice(additionalHours))
+                    : "Free";
+                return new RentalResult(true, "resumed-paid", botName, 
+                    String.valueOf(additionalHours), priceStr);
+            }
+            
+            // Refund on failure
+            if (plugin.isEconomyEnabled()) {
+                plugin.getEconomyHandler().deposit(player, calculatePrice(additionalHours));
+            }
+            return new RentalResult(false, "resume-failed");
+        }
     }
     
     /**
@@ -201,11 +319,12 @@ public class RentalManager {
         boolean warningsEnabled = plugin.getConfig().getBoolean("rentals.expiry-warnings.enabled", true);
         int gracePeriod = plugin.getConfig().getInt("rentals.on-expiry.grace-period", 60);
         
-        for (RentableBot bot : plugin.getBotManager().getAllBots()) {
+        // Only check ACTIVE bots for expiry
+        for (RentableBot bot : plugin.getBotManager().getAllActiveBots()) {
             Duration remaining = Duration.between(now, bot.getExpiresAt());
             long minutesLeft = remaining.toMinutes();
             
-            // Check for expiry
+            // Check for expiry (only active bots)
             if (remaining.isNegative() && remaining.abs().toSeconds() > gracePeriod) {
                 handleExpiredRental(bot);
                 continue;
@@ -223,10 +342,51 @@ public class RentalManager {
                 }
             }
         }
+        
+        // Check for auto-cleanup of old expired bots
+        checkAutoCleanup();
     }
     
     /**
-     * Handles an expired rental.
+     * Checks and performs auto-cleanup of old expired bots.
+     */
+    private void checkAutoCleanup() {
+        if (!plugin.getConfig().getBoolean("cleanup.enabled", true)) {
+            return;
+        }
+        
+        int cleanupDays = plugin.getConfig().getInt("cleanup.delete-expired-after-days", 30);
+        if (cleanupDays <= 0) return;
+        
+        Instant cutoffTime = Instant.now().minusSeconds(cleanupDays * 86400L);
+        
+        for (RentableBot bot : plugin.getBotManager().getAllBots()) {
+            // Only cleanup EXPIRED or STOPPED bots
+            if (!bot.getStatus().isReserved()) continue;
+            
+            // Check if last active is before cutoff
+            if (bot.getLastActiveAt() != null && bot.getLastActiveAt().isBefore(cutoffTime)) {
+                String botName = bot.getInternalName();
+                UUID ownerUUID = bot.getOwnerUUID();
+                
+                // Notify owner if online
+                if (plugin.getConfig().getBoolean("cleanup.notify-before-cleanup", true)) {
+                    Player owner = Bukkit.getPlayer(ownerUUID);
+                    if (owner != null) {
+                        plugin.getMessageUtil().send(owner, "notifications.cleanup", "bot", botName);
+                    }
+                }
+                
+                // Delete the bot
+                plugin.getBotManager().deleteBot(botName);
+                plugin.getStorageManager().deleteRental(botName);
+                plugin.getLogger().info("Auto-cleanup: Deleted expired bot '" + botName + "'");
+            }
+        }
+    }
+    
+    /**
+     * Handles an expired rental - marks as EXPIRED instead of deleting.
      */
     private void handleExpiredRental(RentableBot bot) {
         String botName = bot.getInternalName();
@@ -234,18 +394,18 @@ public class RentalManager {
         
         plugin.getLogger().info("Rental expired for bot: " + botName);
         
+        // Mark bot as expired (does not delete)
+        plugin.getBotManager().expireBot(botName);
+        
+        // Save the updated status
+        plugin.getStorageManager().saveRental(bot);
+        
         // Notify owner
         if (plugin.getConfig().getBoolean("rentals.on-expiry.notify-owner", true)) {
             Player owner = Bukkit.getPlayer(ownerUUID);
             if (owner != null) {
                 plugin.getMessageUtil().send(owner, "notifications.expired", "bot", botName);
             }
-        }
-        
-        // Remove bot
-        if (plugin.getConfig().getBoolean("rentals.on-expiry.kick-bot", true)) {
-            plugin.getBotManager().stopBot(botName);
-            plugin.getStorageManager().deleteRental(botName);
         }
         
         // Clear warnings for this bot
@@ -268,8 +428,10 @@ public class RentalManager {
             if (plugin.getConfig().getBoolean("notifications.sounds.enabled", true)) {
                 String soundName = plugin.getConfig().getString("notifications.sounds.on-warning", "BLOCK_NOTE_BLOCK_PLING");
                 try {
-                    owner.playSound(owner.getLocation(), 
-                        org.bukkit.Sound.valueOf(soundName), 1.0f, 1.0f);
+                    org.bukkit.Sound sound = org.bukkit.Registry.SOUNDS.get(org.bukkit.NamespacedKey.minecraft(soundName.toLowerCase()));
+                    if (sound != null) {
+                        owner.playSound(owner.getLocation(), sound, 1.0f, 1.0f);
+                    }
                 } catch (Exception ignored) {}
             }
         }
@@ -280,21 +442,54 @@ public class RentalManager {
      */
     public void loadRentals() {
         List<RentableBot> rentals = plugin.getStorageManager().loadRentals();
+        int activeCount = 0;
+        int stoppedCount = 0;
+        int expiredCount = 0;
+        
         for (RentableBot bot : rentals) {
-            // Skip expired rentals
-            if (Instant.now().isAfter(bot.getExpiresAt())) {
-                plugin.getStorageManager().deleteRental(bot.getInternalName());
-                continue;
-            }
-            
-            // Reconnect bot
-            if (bot.connect()) {
-                plugin.getBotManager().registerBot(bot);
-                plugin.getLogger().info("Resumed rental: " + bot.getInternalName() + 
-                    " (owner: " + bot.getOwnerName() + ")");
+            switch (bot.getStatus()) {
+                case ACTIVE -> {
+                    // Check if should have expired while offline
+                    if (Instant.now().isAfter(bot.getExpiresAt())) {
+                        // Mark as expired instead of deleting
+                        bot.setStatus(BotStatus.EXPIRED);
+                        bot.setRemainingSeconds(0);
+                        plugin.getBotManager().registerBotWithoutConnect(bot);
+                        plugin.getStorageManager().saveRental(bot);
+                        expiredCount++;
+                        plugin.getLogger().info("Bot '" + bot.getInternalName() + "' expired while offline");
+                    } else {
+                        // Reconnect active bot
+                        if (bot.connect()) {
+                            plugin.getBotManager().registerBot(bot);
+                            activeCount++;
+                            plugin.getLogger().info("Resumed rental: " + bot.getInternalName() + 
+                                " (owner: " + bot.getOwnerName() + ")");
+                        } else {
+                            // Failed to connect - still register but as failed
+                            plugin.getBotManager().registerBot(bot);
+                            plugin.getLogger().warning("Failed to reconnect bot: " + bot.getInternalName());
+                        }
+                    }
+                }
+                case STOPPED -> {
+                    // Register stopped bot without connecting
+                    plugin.getBotManager().registerBotWithoutConnect(bot);
+                    stoppedCount++;
+                    plugin.debug("Loaded stopped bot: " + bot.getInternalName() + 
+                        " (" + formatTime(bot.getRemainingSeconds()) + " remaining)");
+                }
+                case EXPIRED -> {
+                    // Register expired bot without connecting
+                    plugin.getBotManager().registerBotWithoutConnect(bot);
+                    expiredCount++;
+                    plugin.debug("Loaded expired bot: " + bot.getInternalName());
+                }
             }
         }
-        plugin.getLogger().info("Loaded " + plugin.getBotManager().getTotalBotCount() + " active rentals");
+        
+        plugin.getLogger().info("Loaded rentals - Active: " + activeCount + 
+            ", Stopped: " + stoppedCount + ", Expired: " + expiredCount);
     }
     
     /**
@@ -321,7 +516,6 @@ public class RentalManager {
         // Note: min-length and max-length only apply to custom names, not auto-generated
         // Auto-generated names like "PlayerName_Bot1" can be longer
         int minLength = plugin.getConfig().getInt("bots.naming.min-length", 3);
-        int maxLength = plugin.getConfig().getInt("bots.naming.max-length", 16); // Changed default to 16 (MC max)
         
         if (name.length() < minLength) {
             return "Name too short (min: " + minLength + ")";

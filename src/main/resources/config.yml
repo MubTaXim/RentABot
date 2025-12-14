@@ -51,8 +51,14 @@ economy:
 #     Bot Limits
 # ========================
 limits:
-  # Maximum bots per player (0 = unlimited)
-  max-bots-per-player: 3
+  # Maximum ACTIVE bots per player (0 = unlimited)
+  # Active bots are currently connected and using rental time
+  max-active-bots: 3
+  
+  # Maximum RESERVED bots per player (0 = unlimited)
+  # Reserved = stopped + expired bots that haven't been deleted
+  # Players can resume these bots later
+  max-reserved-bots: 5
   
   # Maximum total bots on the server (0 = unlimited)
   max-total-bots: 50
@@ -63,6 +69,19 @@ limits:
   
   # Maximum bots that can be in the same chunk
   max-bots-per-chunk: 2
+
+# ========================
+#     Auto Cleanup
+# ========================
+cleanup:
+  # Enable automatic cleanup of old expired bots
+  enabled: true
+  
+  # Delete expired bots after this many days (0 = never auto-delete)
+  delete-expired-after-days: 30
+  
+  # How often to check for cleanup (minutes)
+  check-interval: 60
 
 # ========================
 #     Bot Behavior

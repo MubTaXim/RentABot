@@ -6,11 +6,11 @@
 
     <groupId>com.ximpify</groupId>
     <artifactId>RentABot</artifactId>
-    <version>1.0.5</version>
+    <version>1.1.0</version>
     <packaging>jar</packaging>
 
     <name>RentABot</name>
-    <description>Rent bot players for AFK farms - Pure Java implementation</description>
+    <description>Rent bot players for AFK farms - A Minecraft plugin by MubTaXim</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -64,6 +64,30 @@
             <artifactId>protocol</artifactId>
             <version>1.21.9-SNAPSHOT</version>
             <scope>compile</scope>
+            <exclusions>
+                <!-- Exclude QUIC support - not needed for Minecraft -->
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-codec-native-quic</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-codec-classes-quic</artifactId>
+                </exclusion>
+                <!-- Exclude unnecessary Netty transports -->
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-transport-rxtx</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-transport-sctp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-transport-udt</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         
         <!-- Vault API -->
@@ -95,6 +119,14 @@
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>
             <version>5.1.0</version>
+            <scope>compile</scope>
+        </dependency>
+        
+        <!-- SLF4J API (required by HikariCP) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.9</version>
             <scope>compile</scope>
         </dependency>
     </dependencies>
@@ -148,6 +180,10 @@
                                     <pattern>com.zaxxer.hikari</pattern>
                                     <shadedPattern>com.ximpify.rentabot.libs.hikari</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>org.slf4j</pattern>
+                                    <shadedPattern>com.ximpify.rentabot.libs.slf4j</shadedPattern>
+                                </relocation>
                             </relocations>
                             <filters>
                                 <filter>
@@ -157,6 +193,28 @@
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
                                         <exclude>META-INF/MANIFEST.MF</exclude>
+                                        <!-- Exclude QUIC native libraries - not needed for Minecraft -->
+                                        <exclude>META-INF/native/*quiche*</exclude>
+                                        <exclude>META-INF/native/libnetty_quiche*</exclude>
+                                        <exclude>META-INF/native/netty_quiche*</exclude>
+                                        <!-- Exclude unused platform SQLite natives (keep Linux x86_64, Windows x86_64, Mac) -->
+                                        <exclude>org/sqlite/native/Linux-Android/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/arm/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/armv6/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/armv7/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/ppc64/**</exclude>
+                                        <exclude>org/sqlite/native/Linux-Musl/**</exclude>
+                                        <exclude>org/sqlite/native/FreeBSD/**</exclude>
+                                        <exclude>org/sqlite/native/AIX/**</exclude>
+                                        <exclude>org/sqlite/native/HPUX/**</exclude>
+                                        <exclude>org/sqlite/native/SunOS/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/android-arm/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/android-arm64/**</exclude>
+                                        <!-- Exclude Netty natives for unused platforms (keep Linux x86_64) -->
+                                        <exclude>META-INF/native/libnetty_transport*aarch*</exclude>
+                                        <exclude>META-INF/native/libnetty_transport*riscv*</exclude>
+                                        <exclude>META-INF/native/libnetty_transport*osx*</exclude>
+                                        <exclude>META-INF/native/libnetty_resolver*osx*</exclude>
                                     </excludes>
                                 </filter>
                             </filters>

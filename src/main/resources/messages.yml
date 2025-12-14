@@ -67,14 +67,27 @@ create:
 #    Bot Management
 # ========================
 stop:
-  success: "&aBot '%bot%' has been stopped."
+  success: "&aBot '%bot%' has been paused. &7Time saved: &f%time%"
   not-owner: "&cYou don't own this bot!"
-  already-stopped: "&cThis bot is already stopped!"
+  already-stopped: "&cBot '%bot%' is already stopped!"
+
+resume:
+  success: "&aBot '%bot%' has been resumed! &7Time remaining: &f%time%"
+  resumed-paid: "&aBot '%bot%' resumed with &f%hours% &ahour(s)! Cost: &f%price%"
+  already-active: "&cBot '%bot%' is already active!"
+  max-active: "&cYou've reached your active bot limit! Stop another bot first."
+  no-time: "&cBot '%bot%' has no time remaining. Use &f/rentabot resume %bot% <hours> &cto add time."
+  insufficient-funds: "&cYou don't have enough money to resume with additional hours!"
+
+delete:
+  confirm: "&e&lWarning! &7This will permanently delete bot '%bot%'. &cThis cannot be undone!"
+  success: "&aBot '%bot%' has been permanently deleted."
+  not-owner: "&cYou don't own this bot!"
 
 list:
-  header: "&8&m----------&r &#00D4FF&lYour Bots &8&m----------"
-  entry: "&7• &f%bot% &8- &a%time% remaining &8- &7%status%"
-  empty: "&7You don't have any active bots."
+  header: "&8&m----------&r &#00D4FF&lYour Bots &8&m----------\n&7Active: &a%active%&7/%max_active% &8| &7Reserved: &e%stopped%&7+&c%expired%&7/%max_reserved%"
+  entry: "%indicator% &f%bot% &8- &7%time% &8- &7[%state%] %status%"
+  empty: "&7You don't have any bots."
   footer: "&8&m--------------------------------"
   status-online: "&#00FF00Online"
   status-offline: "&#FF0000Offline"
@@ -153,8 +166,10 @@ help:
   commands:
     - "&f/rentabot &8- &7Open the main GUI menu"
     - "&f/rentabot create <hours> [name] &8- &7Create a new bot"
-    - "&f/rentabot stop <name> &8- &7Stop and remove a bot"
-    - "&f/rentabot list &8- &7List your active bots"
+    - "&f/rentabot stop <name> &8- &7Pause a bot (saves time)"
+    - "&f/rentabot resume <name> [hours] &8- &7Resume a paused bot"
+    - "&f/rentabot delete <name> &8- &7Permanently delete a bot"
+    - "&f/rentabot list &8- &7List all your bots"
     - "&f/rentabot tp <name> &8- &7Teleport a bot to you"
     - "&f/rentabot rename <name> <newname> &8- &7Rename a bot"
     - "&f/rentabot extend <name> <hours> &8- &7Extend rental time"
@@ -172,3 +187,10 @@ help:
     - "&f/rabadmin give <player> <hours> [name] &8- &7Give bot (free)"
     - "&f/rabadmin reload &8- &7Reload configuration"
   admin-footer: "&8&m------------------------------------"
+
+# ========================
+#    Cleanup Messages
+# ========================
+cleanup:
+  bot-deleted: "&7Your expired bot '%bot%' has been automatically deleted after %days% days."
+  warning: "&eYour bot '%bot%' will be deleted in %days% days if not resumed."

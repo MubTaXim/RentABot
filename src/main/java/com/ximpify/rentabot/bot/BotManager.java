@@ -16,13 +16,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BotManager {
     
     private final RentABot plugin;
+    // All bots (active + reserved)
     private final Map<String, RentableBot> bots;
-    private final Map<UUID, Integer> playerBotCounts;
+    // Track counts per player for active bots only
+    private final Map<UUID, Integer> activeBotCounts;
     
     public BotManager(RentABot plugin) {
         this.plugin = plugin;
         this.bots = new ConcurrentHashMap<>();
-        this.playerBotCounts = new ConcurrentHashMap<>();
+        this.activeBotCounts = new ConcurrentHashMap<>();
     }
     
     /**
@@ -54,7 +56,7 @@ public class BotManager {
         // Connect bot
         if (bot.connect()) {
             bots.put(botName.toLowerCase(), bot);
-            playerBotCounts.merge(ownerUUID, 1, Integer::sum);
+            activeBotCounts.merge(ownerUUID, 1, Integer::sum);
             plugin.getLogger().info("Bot '" + botName + "' created for player " + ownerName);
             return bot;
         }
@@ -63,18 +65,84 @@ public class BotManager {
     }
     
     /**
-     * Stops and removes a bot.
+     * Stops a bot (pauses it, doesn't delete).
+     * Bot stays in memory with STOPPED status.
      */
     public boolean stopBot(String botName) {
-        RentableBot bot = bots.remove(botName.toLowerCase());
-        if (bot != null) {
-            bot.disconnect("Rental stopped");
+        RentableBot bot = bots.get(botName.toLowerCase());
+        if (bot != null && bot.getStatus() == BotStatus.ACTIVE) {
+            bot.stopAndFreeze();
             UUID owner = bot.getOwnerUUID();
-            playerBotCounts.computeIfPresent(owner, (k, v) -> v > 1 ? v - 1 : null);
-            plugin.getLogger().info("Bot '" + botName + "' stopped");
+            activeBotCounts.computeIfPresent(owner, (k, v) -> v > 1 ? v - 1 : null);
+            plugin.getLogger().info("Bot '" + botName + "' stopped (paused)");
             return true;
         }
         return false;
+    }
+    
+    /**
+     * Permanently deletes a bot from memory and database.
+     */
+    public boolean deleteBot(String botName) {
+        RentableBot bot = bots.remove(botName.toLowerCase());
+        if (bot != null) {
+            // Disconnect if connected
+            if (bot.isConnected()) {
+                bot.disconnect("Bot deleted");
+            }
+            // Update counts if was active
+            if (bot.getStatus() == BotStatus.ACTIVE) {
+                UUID owner = bot.getOwnerUUID();
+                activeBotCounts.computeIfPresent(owner, (k, v) -> v > 1 ? v - 1 : null);
+            }
+            plugin.getLogger().info("Bot '" + botName + "' permanently deleted");
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Resumes a stopped bot.
+     */
+    public boolean resumeBot(String botName) {
+        RentableBot bot = bots.get(botName.toLowerCase());
+        if (bot != null && bot.getStatus() == BotStatus.STOPPED && bot.hasTimeRemaining()) {
+            if (bot.resume()) {
+                activeBotCounts.merge(bot.getOwnerUUID(), 1, Integer::sum);
+                plugin.getLogger().info("Bot '" + botName + "' resumed");
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Resumes an expired bot with new hours.
+     */
+    public boolean resumeBotWithHours(String botName, int hours) {
+        RentableBot bot = bots.get(botName.toLowerCase());
+        if (bot != null && (bot.getStatus() == BotStatus.EXPIRED || 
+                          (bot.getStatus() == BotStatus.STOPPED && !bot.hasTimeRemaining()))) {
+            if (bot.resumeWithHours(hours)) {
+                activeBotCounts.merge(bot.getOwnerUUID(), 1, Integer::sum);
+                plugin.getLogger().info("Bot '" + botName + "' resumed with " + hours + " hours");
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Marks a bot as expired.
+     */
+    public void expireBot(String botName) {
+        RentableBot bot = bots.get(botName.toLowerCase());
+        if (bot != null && bot.getStatus() == BotStatus.ACTIVE) {
+            bot.markExpired();
+            UUID owner = bot.getOwnerUUID();
+            activeBotCounts.computeIfPresent(owner, (k, v) -> v > 1 ? v - 1 : null);
+            plugin.getLogger().info("Bot '" + botName + "' expired");
+        }
     }
     
     /**
@@ -85,7 +153,7 @@ public class BotManager {
     }
     
     /**
-     * Gets all bots owned by a player.
+     * Gets all bots owned by a player (all states).
      */
     public Collection<RentableBot> getPlayerBots(UUID playerUUID) {
         return bots.values().stream()
@@ -94,10 +162,39 @@ public class BotManager {
     }
     
     /**
-     * Gets all active bots.
+     * Gets all active bots owned by a player.
+     */
+    public Collection<RentableBot> getPlayerActiveBots(UUID playerUUID) {
+        return bots.values().stream()
+            .filter(bot -> bot.getOwnerUUID().equals(playerUUID))
+            .filter(bot -> bot.getStatus() == BotStatus.ACTIVE)
+            .toList();
+    }
+    
+    /**
+     * Gets all reserved (stopped/expired) bots owned by a player.
+     */
+    public Collection<RentableBot> getPlayerReservedBots(UUID playerUUID) {
+        return bots.values().stream()
+            .filter(bot -> bot.getOwnerUUID().equals(playerUUID))
+            .filter(bot -> bot.getStatus().isReserved())
+            .toList();
+    }
+    
+    /**
+     * Gets all bots in memory.
      */
     public Collection<RentableBot> getAllBots() {
         return bots.values();
+    }
+    
+    /**
+     * Gets all active (connected) bots.
+     */
+    public Collection<RentableBot> getAllActiveBots() {
+        return bots.values().stream()
+            .filter(bot -> bot.getStatus() == BotStatus.ACTIVE)
+            .toList();
     }
     
     /**
@@ -144,21 +241,55 @@ public class BotManager {
     }
     
     /**
-     * Gets the number of bots a player owns.
+     * Gets the number of ACTIVE bots a player owns.
      */
     public int getPlayerBotCount(UUID playerUUID) {
-        return playerBotCounts.getOrDefault(playerUUID, 0);
+        return activeBotCounts.getOrDefault(playerUUID, 0);
     }
     
     /**
-     * Gets total bot count.
+     * Gets the number of ACTIVE bots a player owns (alias).
+     */
+    public int getPlayerActiveBotCount(UUID playerUUID) {
+        return activeBotCounts.getOrDefault(playerUUID, 0);
+    }
+    
+    /**
+     * Gets the number of reserved (stopped/expired) bots a player owns.
+     */
+    public int getPlayerReservedBotCount(UUID playerUUID) {
+        return (int) bots.values().stream()
+            .filter(bot -> bot.getOwnerUUID().equals(playerUUID))
+            .filter(bot -> bot.getStatus().isReserved())
+            .count();
+    }
+    
+    /**
+     * Gets total bot count (all players) for a specific status.
+     */
+    public int getTotalBotCountByStatus(BotStatus status) {
+        return (int) bots.values().stream()
+            .filter(bot -> bot.getStatus() == status)
+            .count();
+    }
+    
+    /**
+     * Gets total active bot count.
      */
     public int getTotalBotCount() {
+        return getTotalBotCountByStatus(BotStatus.ACTIVE);
+    }
+    
+    /**
+     * Gets total bot count (all states).
+     */
+    public int getTotalAllBotsCount() {
         return bots.size();
     }
     
     /**
      * Checks if a bot name is available.
+     * A name is NOT available if any bot (active or reserved) has it.
      */
     public boolean isNameAvailable(String botName) {
         return !bots.containsKey(botName.toLowerCase());
@@ -225,7 +356,8 @@ public class BotManager {
      */
     public void checkBotStatus() {
         for (RentableBot bot : bots.values()) {
-            if (!bot.isConnected() && bot.shouldReconnect()) {
+            // Only try to reconnect active bots
+            if (bot.getStatus() == BotStatus.ACTIVE && !bot.isConnected() && bot.shouldReconnect()) {
                 plugin.debug("Attempting to reconnect bot: " + bot.getInternalName());
                 bot.reconnect();
             }
@@ -233,21 +365,43 @@ public class BotManager {
     }
     
     /**
-     * Disconnects all bots (used on plugin disable).
+     * Disconnects all active bots (used on plugin disable).
+     * Stopped/expired bots remain in memory for saving.
      */
     public void disconnectAll() {
         for (RentableBot bot : bots.values()) {
-            bot.disconnect("Server shutdown");
+            if (bot.isConnected()) {
+                bot.disconnect("Server shutdown");
+            }
         }
+        // Don't clear bots map - let RentalManager save them first
+        activeBotCounts.clear();
+    }
+    
+    /**
+     * Clears all bots from memory (call after saving).
+     */
+    public void clearAll() {
         bots.clear();
-        playerBotCounts.clear();
+        activeBotCounts.clear();
     }
     
     /**
      * Registers an existing bot (used when loading from storage).
+     * Only increments active count if bot is ACTIVE.
      */
     public void registerBot(RentableBot bot) {
         bots.put(bot.getInternalName().toLowerCase(), bot);
-        playerBotCounts.merge(bot.getOwnerUUID(), 1, Integer::sum);
+        if (bot.getStatus() == BotStatus.ACTIVE) {
+            activeBotCounts.merge(bot.getOwnerUUID(), 1, Integer::sum);
+        }
+    }
+    
+    /**
+     * Registers a bot without connecting (for stopped/expired bots from storage).
+     */
+    public void registerBotWithoutConnect(RentableBot bot) {
+        bots.put(bot.getInternalName().toLowerCase(), bot);
+        // Don't increment active counts for non-active bots
     }
 }
