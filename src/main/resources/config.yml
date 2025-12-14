@@ -133,12 +133,30 @@ bots:
       - "wants you to teleport"
     
     # Anti-AFK movement (prevents server AFK kick)
+    # This feature is designed to bypass common anti-AFK plugins
     anti-afk:
       enabled: true
-      # Movement interval in seconds
-      interval: 60
-      # Type: look, sneak, jump, move
-      type: "look"
+      
+      # Base movement interval in seconds
+      # Actual interval will be randomized: interval ± (interval * randomness)
+      interval: 45
+      
+      # Randomness factor (0.0-1.0)
+      # Example: interval=45, randomness=0.5 → actual interval 22-67 seconds
+      # Higher values = more unpredictable = better bypass
+      interval-randomness: 0.4
+      
+      # Movement types (comma-separated for random selection):
+      # - look: Random head movements (most natural)
+      # - sneak: Crouch for 1-3 seconds
+      # - jump: Simulated jump with physics
+      # - move: Small position change and return
+      # - swing: Arm swinging (like hitting)
+      # - combo: Does look + swing + move together (best bypass)
+      # 
+      # Recommended for anti-AFK bypass: "look,swing,combo"
+      # For maximum bypass: "look,sneak,jump,move,swing,combo"
+      type: "look,swing,combo"
     
     # Auto-reconnect if bot disconnects
     auto-reconnect:

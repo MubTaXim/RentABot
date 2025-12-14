@@ -177,18 +177,33 @@ public class RentABot extends JavaPlugin {
             botManager.checkBotStatus();
         }, checkInterval, checkInterval);
         
-        // Anti-AFK task
+        // Anti-AFK task with randomized intervals
         if (getConfig().getBoolean("bots.behavior.anti-afk.enabled", true)) {
-            int antiAfkInterval = getConfig().getInt("bots.behavior.anti-afk.interval", 15) * 20;
-            Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
-                for (RentableBot bot : botManager.getAllBots()) {
-                    if (bot.isConnected()) {
-                        bot.performAntiAFK();
-                    }
-                }
-            }, antiAfkInterval, antiAfkInterval);
-            debug("Anti-AFK task started with interval: " + antiAfkInterval / 20 + " seconds");
+            int baseInterval = getConfig().getInt("bots.behavior.anti-afk.interval", 45) * 20;
+            double randomness = getConfig().getDouble("bots.behavior.anti-afk.interval-randomness", 0.4);
+            
+            // Schedule individual random interval tasks per bot instead of fixed global interval
+            scheduleAntiAFKTask(baseInterval, randomness);
+            debug("Anti-AFK task started with base interval: " + baseInterval / 20 + " seconds, randomness: " + (randomness * 100) + "%");
         }
+    }
+    
+    private void scheduleAntiAFKTask(int baseInterval, double randomness) {
+        // Calculate randomized interval: base ± (base * randomness)
+        int minInterval = (int) (baseInterval * (1.0 - randomness));
+        int maxInterval = (int) (baseInterval * (1.0 + randomness));
+        int actualInterval = minInterval + (int) (Math.random() * (maxInterval - minInterval));
+        
+        Bukkit.getScheduler().runTaskLaterAsynchronously(this, () -> {
+            // Perform anti-AFK for all connected bots
+            for (RentableBot bot : botManager.getAllBots()) {
+                if (bot.isConnected()) {
+                    bot.performAntiAFK();
+                }
+            }
+            // Schedule next with new random interval
+            scheduleAntiAFKTask(baseInterval, randomness);
+        }, actualInterval);
     }
     
     public void reload() {
