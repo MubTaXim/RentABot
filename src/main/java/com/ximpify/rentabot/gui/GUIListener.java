@@ -148,6 +148,7 @@ public class GUIListener implements Listener {
                 guiManager.openBotManageMenu(player, optBot.get());
             } else {
                 plugin.getMessageUtil().send(player, "general.bot-not-found", "bot", botName);
+                plugin.getMessageUtil().playSound(player, "on-error");
             }
         }
     }
@@ -157,6 +158,7 @@ public class GUIListener implements Listener {
         if (optBot.isEmpty()) {
             player.closeInventory();
             plugin.getMessageUtil().send(player, "general.bot-not-found", "bot", botName);
+            plugin.getMessageUtil().playSound(player, "on-error");
             return;
         }
         
@@ -203,6 +205,7 @@ public class GUIListener implements Listener {
                         if (result.success()) {
                             String timeLeft = plugin.getRentalManager().formatTime(bot.getRemainingSeconds());
                             plugin.getMessageUtil().send(player, "stop.success", "bot", botName, "time", timeLeft);
+                            plugin.getMessageUtil().playSound(player, "on-stop");
                         }
                     });
                 }
@@ -218,6 +221,7 @@ public class GUIListener implements Listener {
                         if (result.success()) {
                             plugin.getMessageUtil().send(player, "resume.success", "bot", botName, 
                                 "time", plugin.getRentalManager().formatTime(bot.getRemainingSeconds()));
+                            plugin.getMessageUtil().playSound(player, "on-resume");
                         } else {
                             String messageKey = switch (result.messageKey()) {
                                 case "max-active-reached" -> "resume.max-active";
@@ -243,6 +247,7 @@ public class GUIListener implements Listener {
                         RentalResult result = plugin.getRentalManager().deleteRental(player, botName, false);
                         if (result.success()) {
                             plugin.getMessageUtil().send(player, "delete.success", "bot", botName);
+                            plugin.getMessageUtil().playSound(player, "on-delete");
                         }
                     });
                 }
@@ -295,6 +300,7 @@ public class GUIListener implements Listener {
                         "bot", botName,
                         "hours", String.valueOf(duration),
                         "price", priceStr);
+                    plugin.getMessageUtil().playSound(player, "on-create");
                 } else {
                     String messageKey = "create." + result.messageKey();
                     // Pass reason if available (for invalid-name errors)
@@ -335,8 +341,10 @@ public class GUIListener implements Listener {
                     plugin.getMessageUtil().send(player, "extend.success",
                         "hours", String.valueOf(duration),
                         "time", result.args()[1]);
+                    plugin.getMessageUtil().playSound(player, "on-extend");
                 } else {
                     plugin.getMessageUtil().send(player, "extend.failed", "reason", result.messageKey());
+                    plugin.getMessageUtil().playSound(player, "on-error");
                 }
                 return;
             }
@@ -375,6 +383,7 @@ public class GUIListener implements Listener {
                     plugin.getMessageUtil().send(player, "resume.success",
                         "bot", botName,
                         "time", timeLeft);
+                    plugin.getMessageUtil().playSound(player, "on-resume");
                 } else {
                     String messageKey = switch (result.messageKey()) {
                         case "max-active-reached" -> "resume.max-active";

@@ -2,9 +2,13 @@ package com.ximpify.rentabot.util;
 
 import com.ximpify.rentabot.RentABot;
 import net.kyori.adventure.text.Component;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
+import org.bukkit.Sound;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.util.List;
@@ -139,5 +143,50 @@ public class MessageUtil {
     public String stripColors(String message) {
         if (message == null) return "";
         return message.replaceAll("(?i)§[0-9A-FK-OR]|&#[A-Fa-f0-9]{6}", "");
+    }
+    
+    /**
+     * Plays a sound effect to a player.
+     * @param player The player to play the sound to
+     * @param soundKey The config key under notifications.sounds (e.g., "on-create")
+     */
+    public void playSound(Player player, String soundKey) {
+        if (player == null) return;
+        if (!plugin.getConfig().getBoolean("notifications.sounds.enabled", true)) return;
+        
+        String soundName = plugin.getConfig().getString("notifications.sounds." + soundKey);
+        if (soundName == null || soundName.isEmpty()) return;
+        
+        try {
+            Sound sound = Registry.SOUNDS.get(NamespacedKey.minecraft(soundName.toLowerCase()));
+            if (sound != null) {
+                float volume = (float) plugin.getConfig().getDouble("notifications.sounds.volume", 1.0);
+                float pitch = (float) plugin.getConfig().getDouble("notifications.sounds.pitch", 1.0);
+                player.playSound(player.getLocation(), sound, volume, pitch);
+            }
+        } catch (Exception e) {
+            plugin.debug("Failed to play sound '" + soundKey + "': " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Plays a sound effect to a player with custom pitch.
+     */
+    public void playSound(Player player, String soundKey, float pitch) {
+        if (player == null) return;
+        if (!plugin.getConfig().getBoolean("notifications.sounds.enabled", true)) return;
+        
+        String soundName = plugin.getConfig().getString("notifications.sounds." + soundKey);
+        if (soundName == null || soundName.isEmpty()) return;
+        
+        try {
+            Sound sound = Registry.SOUNDS.get(NamespacedKey.minecraft(soundName.toLowerCase()));
+            if (sound != null) {
+                float volume = (float) plugin.getConfig().getDouble("notifications.sounds.volume", 1.0);
+                player.playSound(player.getLocation(), sound, volume, pitch);
+            }
+        } catch (Exception e) {
+            plugin.debug("Failed to play sound '" + soundKey + "': " + e.getMessage());
+        }
     }
 }

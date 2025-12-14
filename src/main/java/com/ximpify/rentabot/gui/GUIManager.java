@@ -47,6 +47,9 @@ public class GUIManager {
         // Fill background
         fillBackground(inv, Material.GRAY_STAINED_GLASS_PANE);
         
+        // Play GUI open sound
+        plugin.getMessageUtil().playSound(player, "on-gui-open");
+        
         // My Bots button (slot 11)
         int activeCount = plugin.getBotManager().getPlayerActiveBotCount(player.getUniqueId());
         int reservedCount = plugin.getBotManager().getPlayerReservedBotCount(player.getUniqueId());

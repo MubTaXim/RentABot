@@ -122,7 +122,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
                 "price", price);
             
             // Play sound
-            playSound(player, "on-create");
+            plugin.getMessageUtil().playSound(player, "on-create");
         } else {
             // Show error message
             String messageKey = "create." + result.messageKey();
@@ -171,7 +171,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         if (result.success()) {
             String timeLeft = plugin.getRentalManager().formatTime(secondsRemaining);
             plugin.getMessageUtil().send(player, "stop.success", "bot", botName, "time", timeLeft);
-            playSound(player, "on-stop");
+            plugin.getMessageUtil().playSound(player, "on-stop");
         } else {
             String messageKey = result.messageKey().equals("not-found") ? "general.bot-not-found" : "stop." + result.messageKey();
             plugin.getMessageUtil().send(player, messageKey, "bot", botName);
@@ -231,7 +231,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
             } else {
                 plugin.getMessageUtil().send(player, "resume.success", "bot", botName, "time", "N/A");
             }
-            playSound(player, "on-create");
+            plugin.getMessageUtil().playSound(player, "on-resume");
         } else {
             String messageKey = switch (result.messageKey()) {
                 case "not-found" -> "general.bot-not-found";
@@ -284,7 +284,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         
         if (result.success()) {
             plugin.getMessageUtil().send(player, "delete.success", "bot", botName);
-            playSound(player, "on-stop");
+            plugin.getMessageUtil().playSound(player, "on-delete");
         } else {
             String messageKey = result.messageKey().equals("not-found") ? "general.bot-not-found" : "delete." + result.messageKey();
             plugin.getMessageUtil().send(player, messageKey, "bot", botName);
@@ -398,6 +398,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         // Teleport bot to player
         if (plugin.getBotManager().teleportBot(botName, player.getLocation())) {
             plugin.getMessageUtil().send(player, "tp.success", "bot", botName);
+            plugin.getMessageUtil().playSound(player, "on-teleport");
         } else {
             plugin.getMessageUtil().send(player, "tp.failed", "bot", botName, "reason", "Bot is not connected");
         }
@@ -448,6 +449,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         // Rename
         if (plugin.getBotManager().renameBot(oldName, newName)) {
             plugin.getMessageUtil().send(player, "rename.success", "old", oldName, "bot", newName);
+            plugin.getMessageUtil().playSound(player, "on-rename");
         }
     }
     
@@ -485,6 +487,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
             plugin.getMessageUtil().send(player, "extend.success",
                 "hours", result.args()[0],
                 "time", result.args()[1]);
+            plugin.getMessageUtil().playSound(player, "on-extend");
         } else {
             String messageKey = result.messageKey().equals("not-found") ? "general.bot-not-found" : "extend." + result.messageKey();
             plugin.getMessageUtil().send(player, messageKey, "bot", botName);
@@ -573,20 +576,6 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         plugin.getMessageUtil().sendRaw(player, "&7Bots: &a" + connectedBots + " online &7/ &f" + totalBots + " total");
         plugin.getMessageUtil().sendRaw(player, "&7GitHub: &fgithub.com/MubTaXim/RentABot");
         plugin.getMessageUtil().sendRaw(player, "");
-    }
-    
-    private void playSound(Player player, String soundKey) {
-        if (plugin.getConfig().getBoolean("notifications.sounds.enabled", true)) {
-            String soundName = plugin.getConfig().getString("notifications.sounds." + soundKey);
-            if (soundName != null) {
-                try {
-                    org.bukkit.Sound sound = org.bukkit.Registry.SOUNDS.get(org.bukkit.NamespacedKey.minecraft(soundName.toLowerCase()));
-                    if (sound != null) {
-                        player.playSound(player.getLocation(), sound, 1.0f, 1.0f);
-                    }
-                } catch (Exception ignored) {}
-            }
-        }
     }
     
     private String[] parseResultArgs(String key, String[] args) {

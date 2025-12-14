@@ -113,6 +113,7 @@ public class PlayerListener implements Listener {
                 String oldName = bot.getInternalName();
                 plugin.getBotManager().renameBot(oldName, newName);
                 plugin.getMessageUtil().send(player, "rename.success", "old", oldName, "bot", newName);
+                plugin.getMessageUtil().playSound(player, "on-rename");
             });
         }
     }

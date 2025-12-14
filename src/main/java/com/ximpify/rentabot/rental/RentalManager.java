@@ -374,6 +374,7 @@ public class RentalManager {
                     Player owner = Bukkit.getPlayer(ownerUUID);
                     if (owner != null) {
                         plugin.getMessageUtil().send(owner, "notifications.cleanup", "bot", botName);
+                        plugin.getMessageUtil().playSound(owner, "on-cleanup");
                     }
                 }
                 
@@ -405,6 +406,7 @@ public class RentalManager {
             Player owner = Bukkit.getPlayer(ownerUUID);
             if (owner != null) {
                 plugin.getMessageUtil().send(owner, "notifications.expired", "bot", botName);
+                plugin.getMessageUtil().playSound(owner, "on-expired");
             }
         }
         
@@ -424,16 +426,8 @@ public class RentalManager {
             plugin.getMessageUtil().send(owner, "notifications.expiry-warning", 
                 "bot", bot.getInternalName(), "time", timeStr);
             
-            // Play warning sound
-            if (plugin.getConfig().getBoolean("notifications.sounds.enabled", true)) {
-                String soundName = plugin.getConfig().getString("notifications.sounds.on-warning", "BLOCK_NOTE_BLOCK_PLING");
-                try {
-                    org.bukkit.Sound sound = org.bukkit.Registry.SOUNDS.get(org.bukkit.NamespacedKey.minecraft(soundName.toLowerCase()));
-                    if (sound != null) {
-                        owner.playSound(owner.getLocation(), sound, 1.0f, 1.0f);
-                    }
-                } catch (Exception ignored) {}
-            }
+            // Play warning sound using centralized method
+            plugin.getMessageUtil().playSound(owner, "on-warning");
         }
     }
     

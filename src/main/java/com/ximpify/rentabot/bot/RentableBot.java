@@ -650,6 +650,7 @@ public class RentableBot {
                 if (owner != null) {
                     plugin.getMessageUtil().send(owner, "notifications.reconnected", 
                         "bot", internalName);
+                    plugin.getMessageUtil().playSound(owner, "on-reconnect");
                 }
             });
         }
@@ -707,6 +708,7 @@ public class RentableBot {
                     if (owner != null) {
                         plugin.getMessageUtil().send(owner, "notifications.disconnected", 
                             "bot", internalName, "reason", reason);
+                        plugin.getMessageUtil().playSound(owner, "on-disconnect");
                     }
                 });
                 
@@ -775,6 +777,7 @@ public class RentableBot {
                 if (owner != null) {
                     plugin.getMessageUtil().send(owner, "notifications.bot-died", 
                         "bot", internalName);
+                    plugin.getMessageUtil().playSound(owner, "on-bot-died");
                 }
             });
             

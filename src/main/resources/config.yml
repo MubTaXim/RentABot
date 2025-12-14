@@ -309,9 +309,30 @@ notifications:
   # Sound effects
   sounds:
     enabled: true
-    on-create: "ENTITY_PLAYER_LEVELUP"
-    on-stop: "ENTITY_VILLAGER_NO"
-    on-warning: "BLOCK_NOTE_BLOCK_PLING"
+    volume: 1.0
+    pitch: 1.0
+    
+    # Bot lifecycle sounds
+    on-create: "entity_player_levelup"        # Bot created successfully
+    on-stop: "entity_villager_no"             # Bot paused/stopped
+    on-resume: "block_beacon_activate"        # Bot resumed from pause
+    on-delete: "entity_item_break"            # Bot permanently deleted
+    on-extend: "entity_experience_orb_pickup" # Rental time extended
+    on-rename: "entity_villager_yes"          # Bot renamed successfully
+    on-teleport: "entity_enderman_teleport"   # Teleported to bot
+    
+    # Bot notification sounds
+    on-warning: "block_note_block_pling"      # Expiry warning
+    on-expired: "entity_villager_death"       # Bot rental expired
+    on-cleanup: "block_fire_extinguish"       # Expired bot auto-cleaned
+    on-reconnect: "entity_villager_celebrate" # Bot reconnected
+    on-disconnect: "block_anvil_land"         # Bot disconnected unexpectedly
+    on-bot-died: "entity_wither_hurt"         # Bot died in-game
+    
+    # UI sounds
+    on-gui-open: "ui_button_click"            # GUI menu opened
+    on-gui-click: "ui_button_click"           # GUI button clicked
+    on-error: "entity_villager_no"            # Action failed/error
 
 # ========================
 #   Advanced Settings
