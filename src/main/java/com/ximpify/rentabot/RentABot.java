@@ -13,6 +13,7 @@ import com.ximpify.rentabot.rental.RentalManager;
 import com.ximpify.rentabot.storage.StorageManager;
 import com.ximpify.rentabot.util.ConfigMigrator;
 import com.ximpify.rentabot.util.MessageUtil;
+import com.ximpify.rentabot.util.ReloadManager;
 import com.ximpify.rentabot.util.UpdateChecker;
 
 import net.milkbowl.vault.economy.Economy;
@@ -32,6 +33,7 @@ public class RentABot extends JavaPlugin {
     private GUIManager guiManager;
     private GUIListener guiListener;
     private UpdateChecker updateChecker;
+    private ReloadManager reloadManager;
     
     private boolean economyEnabled = false;
     private boolean placeholderAPIEnabled = false;
@@ -53,6 +55,7 @@ public class RentABot extends JavaPlugin {
         
         // Initialize utilities
         this.messageUtil = new MessageUtil(this);
+        this.reloadManager = new ReloadManager(this);
         
         // Setup storage
         this.storageManager = new StorageManager(this);
@@ -217,9 +220,15 @@ public class RentABot extends JavaPlugin {
     }
     
     public void reload() {
-        reloadConfig();
-        messageUtil.reload();
-        getLogger().info("Configuration reloaded!");
+        // Use ReloadManager for comprehensive reload
+        reloadManager.reloadAll();
+    }
+    
+    /**
+     * Gets the reload manager for advanced reload operations.
+     */
+    public ReloadManager getReloadManager() {
+        return reloadManager;
     }
     
     // Getters

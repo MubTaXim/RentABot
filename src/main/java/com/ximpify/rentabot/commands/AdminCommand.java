@@ -2,6 +2,7 @@ package com.ximpify.rentabot.commands;
 
 import com.ximpify.rentabot.RentABot;
 import com.ximpify.rentabot.bot.RentableBot;
+import com.ximpify.rentabot.util.ReloadManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -47,7 +48,8 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
             case "stopall", "clear" -> handleStopAll(sender);
             case "info" -> handleInfo(sender, args);
             case "give", "create" -> handleGive(sender, args);
-            case "reload" -> handleReload(sender);
+            case "reload" -> handleReload(sender, args);
+            case "update" -> handleUpdate(sender, args);
             case "debug" -> handleDebug(sender);
             case "help", "?" -> showAdminHelp(sender);
             default -> plugin.getMessageUtil().send(sender, "general.invalid-args");
@@ -167,9 +169,155 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
         plugin.getMessageUtil().send(sender, "admin.info-status", "status", status);
     }
     
-    private void handleReload(CommandSender sender) {
-        plugin.reload();
-        plugin.getMessageUtil().send(sender, "general.reload-success");
+    /**
+     * Comprehensive reload command with subcommands.
+     * Usage: /rabadmin reload [all|config|messages|tasks|hooks]
+     */
+    private void handleReload(CommandSender sender, String[] args) {
+        String subType = args.length >= 2 ? args[1].toLowerCase() : "all";
+        ReloadManager rm = plugin.getReloadManager();
+        ReloadManager.ReloadResult result;
+        
+        plugin.getMessageUtil().sendRaw(sender, "&8&m----------------------------------------");
+        plugin.getMessageUtil().sendRaw(sender, "&6&lRentABot Reload");
+        plugin.getMessageUtil().sendRaw(sender, "&8&m----------------------------------------");
+        
+        switch (subType) {
+            case "config" -> {
+                plugin.getMessageUtil().sendRaw(sender, "&7Reloading &fconfig.yml&7...");
+                result = rm.reloadConfig();
+                sendReloadResult(sender, result);
+            }
+            case "messages" -> {
+                plugin.getMessageUtil().sendRaw(sender, "&7Reloading &fmessages.yml&7...");
+                result = rm.reloadMessages();
+                sendReloadResult(sender, result);
+            }
+            case "tasks" -> {
+                plugin.getMessageUtil().sendRaw(sender, "&7Rescheduling tasks...");
+                result = rm.rescheduleTasks();
+                sendReloadResult(sender, result);
+            }
+            case "hooks" -> {
+                plugin.getMessageUtil().sendRaw(sender, "&7Re-validating hooks...");
+                result = rm.revalidateHooks();
+                sendReloadResult(sender, result);
+            }
+            case "all" -> {
+                plugin.getMessageUtil().sendRaw(sender, "&7Performing full reload...");
+                result = rm.reloadAll();
+                sendReloadResult(sender, result);
+            }
+            default -> {
+                plugin.getMessageUtil().sendRaw(sender, "&cUnknown reload type: " + subType);
+                plugin.getMessageUtil().sendRaw(sender, "&7Valid options: &fall, config, messages, tasks, hooks");
+                return;
+            }
+        }
+        
+        plugin.getMessageUtil().sendRaw(sender, "&8&m----------------------------------------");
+    }
+    
+    /**
+     * Sends reload result feedback to the sender.
+     */
+    private void sendReloadResult(CommandSender sender, ReloadManager.ReloadResult result) {
+        // Show changes
+        if (!result.getChanges().isEmpty()) {
+            plugin.getMessageUtil().sendRaw(sender, "");
+            plugin.getMessageUtil().sendRaw(sender, "&a✓ Changes:");
+            for (String change : result.getChanges()) {
+                plugin.getMessageUtil().sendRaw(sender, "  &7• &f" + change);
+            }
+        }
+        
+        // Show errors
+        if (!result.getErrors().isEmpty()) {
+            plugin.getMessageUtil().sendRaw(sender, "");
+            plugin.getMessageUtil().sendRaw(sender, "&c✗ Errors:");
+            for (String error : result.getErrors()) {
+                plugin.getMessageUtil().sendRaw(sender, "  &7• &c" + error);
+            }
+        }
+        
+        // Summary
+        plugin.getMessageUtil().sendRaw(sender, "");
+        if (result.isSuccess()) {
+            plugin.getMessageUtil().sendRaw(sender, "&a✓ Reload completed successfully in " + result.getDuration() + "ms");
+        } else {
+            plugin.getMessageUtil().sendRaw(sender, "&e⚠ Reload completed with errors in " + result.getDuration() + "ms");
+        }
+    }
+    
+    /**
+     * Update command for checking and downloading updates.
+     * Usage: /rabadmin update [check|download|status]
+     */
+    private void handleUpdate(CommandSender sender, String[] args) {
+        String subType = args.length >= 2 ? args[1].toLowerCase() : "check";
+        
+        switch (subType) {
+            case "check" -> {
+                plugin.getMessageUtil().sendRaw(sender, "&7Checking for updates...");
+                plugin.getUpdateChecker().reset(); // Reset to force fresh check
+                plugin.getUpdateChecker().checkForUpdates(sender);
+            }
+            case "download" -> {
+                plugin.getMessageUtil().sendRaw(sender, "&7Starting download...");
+                plugin.getUpdateChecker().downloadUpdate(sender).thenAccept(result -> {
+                    if (!result.isSuccess()) {
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            plugin.getMessageUtil().sendRaw(sender, "&c" + result.getMessage());
+                        });
+                    }
+                });
+            }
+            case "status" -> {
+                showUpdateStatus(sender);
+            }
+            default -> {
+                plugin.getMessageUtil().sendRaw(sender, "&cUnknown update action: " + subType);
+                plugin.getMessageUtil().sendRaw(sender, "&7Valid options: &fcheck, download, status");
+            }
+        }
+    }
+    
+    /**
+     * Shows current update status.
+     */
+    private void showUpdateStatus(CommandSender sender) {
+        var checker = plugin.getUpdateChecker();
+        
+        plugin.getMessageUtil().sendRaw(sender, "&8&m----------------------------------------");
+        plugin.getMessageUtil().sendRaw(sender, "&6&lRentABot Update Status");
+        plugin.getMessageUtil().sendRaw(sender, "&8&m----------------------------------------");
+        plugin.getMessageUtil().sendRaw(sender, "&7Current Version: &f" + checker.getCurrentVersion());
+        
+        if (checker.getLatestVersion() != null) {
+            plugin.getMessageUtil().sendRaw(sender, "&7Latest Version: &f" + checker.getLatestVersion());
+            
+            if (checker.isUpdateAvailable()) {
+                plugin.getMessageUtil().sendRaw(sender, "&7Update Available: &aYes");
+                
+                if (checker.isDownloadCompleted()) {
+                    plugin.getMessageUtil().sendRaw(sender, "&7Download Status: &aCompleted");
+                    plugin.getMessageUtil().sendRaw(sender, "&7File: &f" + checker.getDownloadedFilePath());
+                    plugin.getMessageUtil().sendRaw(sender, "&e&lRestart the server to apply!");
+                } else if (checker.isDownloadInProgress()) {
+                    plugin.getMessageUtil().sendRaw(sender, "&7Download Status: &eIn Progress...");
+                } else {
+                    plugin.getMessageUtil().sendRaw(sender, "&7Download Status: &7Not started");
+                    plugin.getMessageUtil().sendRaw(sender, "&7Use: &f/rabadmin update download");
+                }
+            } else {
+                plugin.getMessageUtil().sendRaw(sender, "&7Update Available: &aNo (up to date)");
+            }
+        } else {
+            plugin.getMessageUtil().sendRaw(sender, "&7Latest Version: &7Unknown (run check first)");
+            plugin.getMessageUtil().sendRaw(sender, "&7Use: &f/rabadmin update check");
+        }
+        
+        plugin.getMessageUtil().sendRaw(sender, "&8&m----------------------------------------");
     }
     
     private void handleDebug(CommandSender sender) {
@@ -268,21 +416,32 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
         
         if (args.length == 1) {
-            completions.addAll(Arrays.asList("list", "stop", "stopall", "info", "give", "reload", "debug", "help"));
+            completions.addAll(Arrays.asList("list", "stop", "stopall", "info", "give", "reload", "update", "debug", "help"));
         } else if (args.length == 2) {
             String sub = args[0].toLowerCase();
-            if (sub.equals("stop") || sub.equals("info")) {
-                // Suggest all bot names
-                completions.addAll(plugin.getBotManager().getAllBots()
-                    .stream()
-                    .map(RentableBot::getInternalName)
-                    .collect(Collectors.toList()));
-            } else if (sub.equals("give") || sub.equals("create")) {
-                // Suggest online players
-                completions.addAll(Bukkit.getOnlinePlayers()
-                    .stream()
-                    .map(Player::getName)
-                    .collect(Collectors.toList()));
+            switch (sub) {
+                case "stop", "info" -> {
+                    // Suggest all bot names
+                    completions.addAll(plugin.getBotManager().getAllBots()
+                        .stream()
+                        .map(RentableBot::getInternalName)
+                        .collect(Collectors.toList()));
+                }
+                case "give", "create" -> {
+                    // Suggest online players
+                    completions.addAll(Bukkit.getOnlinePlayers()
+                        .stream()
+                        .map(Player::getName)
+                        .collect(Collectors.toList()));
+                }
+                case "reload" -> {
+                    // Reload subcommands
+                    completions.addAll(Arrays.asList("all", "config", "messages", "tasks", "hooks"));
+                }
+                case "update" -> {
+                    // Update subcommands
+                    completions.addAll(Arrays.asList("check", "download", "status"));
+                }
             }
         } else if (args.length == 3) {
             String sub = args[0].toLowerCase();

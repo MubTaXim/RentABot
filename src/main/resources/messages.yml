@@ -188,7 +188,9 @@ help:
     - "&f/rabadmin stopall &8- &7Stop all bots"
     - "&f/rabadmin info <name> &8- &7Get bot information"
     - "&f/rabadmin give <player> <hours> [name] &8- &7Give bot (free)"
-    - "&f/rabadmin reload &8- &7Reload configuration"
+    - "&f/rabadmin reload [all|config|messages|tasks|hooks] &8- &7Reload system"
+    - "&f/rabadmin update [check|download|status] &8- &7Update management"
+    - "&f/rabadmin debug &8- &7Toggle debug mode"
   admin-footer: "&8&m------------------------------------"
 
 # ========================

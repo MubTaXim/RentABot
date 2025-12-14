@@ -56,7 +56,7 @@ public class BotManager {
         // Connect bot
         if (bot.connect()) {
             bots.put(botName.toLowerCase(), bot);
-            activeBotCounts.merge(ownerUUID, 1, Integer::sum);
+            activeBotCounts.merge(ownerUUID, 1, (a, b) -> a + b);
             plugin.getLogger().info("Bot '" + botName + "' created for player " + ownerName);
             return bot;
         }
@@ -108,7 +108,7 @@ public class BotManager {
         RentableBot bot = bots.get(botName.toLowerCase());
         if (bot != null && bot.getStatus() == BotStatus.STOPPED && bot.hasTimeRemaining()) {
             if (bot.resume()) {
-                activeBotCounts.merge(bot.getOwnerUUID(), 1, Integer::sum);
+                activeBotCounts.merge(bot.getOwnerUUID(), 1, (a, b) -> a + b);
                 plugin.getLogger().info("Bot '" + botName + "' resumed");
                 return true;
             }
@@ -124,7 +124,7 @@ public class BotManager {
         if (bot != null && (bot.getStatus() == BotStatus.EXPIRED || 
                           (bot.getStatus() == BotStatus.STOPPED && !bot.hasTimeRemaining()))) {
             if (bot.resumeWithHours(hours)) {
-                activeBotCounts.merge(bot.getOwnerUUID(), 1, Integer::sum);
+                activeBotCounts.merge(bot.getOwnerUUID(), 1, (a, b) -> a + b);
                 plugin.getLogger().info("Bot '" + botName + "' resumed with " + hours + " hours");
                 return true;
             }
@@ -393,7 +393,7 @@ public class BotManager {
     public void registerBot(RentableBot bot) {
         bots.put(bot.getInternalName().toLowerCase(), bot);
         if (bot.getStatus() == BotStatus.ACTIVE) {
-            activeBotCounts.merge(bot.getOwnerUUID(), 1, Integer::sum);
+            activeBotCounts.merge(bot.getOwnerUUID(), 1, (a, b) -> a + b);
         }
     }
     
