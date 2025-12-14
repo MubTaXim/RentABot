@@ -72,3 +72,7 @@ permissions:
   rentabot.admin:
     description: Admin permissions
     default: op
+  
+  rentabot.admin.notify:
+    description: Receive update notifications on join
+    default: op
