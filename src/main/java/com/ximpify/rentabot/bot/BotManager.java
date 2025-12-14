@@ -200,7 +200,8 @@ public class BotManager {
     /**
      * Sanitizes a username to only contain valid Minecraft characters.
      * Valid characters: [a-zA-Z0-9_], max 16 characters.
-     * Capitalizes first letter of each word for consistency.
+     * Normalizes to lowercase first, then capitalizes first letter of each word.
+     * This ensures consistent casing regardless of player name input (AuthMe is case-sensitive).
      */
     private String sanitizeUsername(String name) {
         // Remove all non-alphanumeric characters except underscore
@@ -211,7 +212,11 @@ public class BotManager {
             sanitized = "Bot_" + System.currentTimeMillis() % 10000;
         }
         
-        // Capitalize first letter after each underscore for consistency (AuthMe is case-sensitive)
+        // CRITICAL: Lowercase first, then capitalize first letter after each underscore
+        // This ensures consistent casing regardless of player name input
+        // e.g., "Madhurjojo", "MADHURJOJO", "madhurjojo" all become "Madhurjojo"
+        sanitized = sanitized.toLowerCase();
+        
         StringBuilder result = new StringBuilder();
         boolean capitalizeNext = true;
         for (char c : sanitized.toCharArray()) {
