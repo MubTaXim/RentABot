@@ -16,6 +16,9 @@
 # Color codes: &a, &b, &c, etc. or hex: &#FF5555
 # ============================================================
 
+# DO NOT CHANGE THIS - Used for automatic config migration
+messages-version: 2
+
 # Message prefix (used before most messages)
 prefix: "&#00D4FF&lRentABot &8» &7"
 

@@ -11,7 +11,9 @@ import com.ximpify.rentabot.hooks.PlaceholderAPIHook;
 import com.ximpify.rentabot.listeners.PlayerListener;
 import com.ximpify.rentabot.rental.RentalManager;
 import com.ximpify.rentabot.storage.StorageManager;
+import com.ximpify.rentabot.util.ConfigMigrator;
 import com.ximpify.rentabot.util.MessageUtil;
+import com.ximpify.rentabot.util.UpdateChecker;
 
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
@@ -29,6 +31,7 @@ public class RentABot extends JavaPlugin {
     private MessageUtil messageUtil;
     private GUIManager guiManager;
     private GUIListener guiListener;
+    private UpdateChecker updateChecker;
     
     private boolean economyEnabled = false;
     private boolean placeholderAPIEnabled = false;
@@ -42,6 +45,11 @@ public class RentABot extends JavaPlugin {
         saveDefaultConfig();
         saveResource("messages.yml", false);
         saveResource("shopguiplus-example.yml", false);
+        
+        // Migrate configs if needed (handles version updates)
+        ConfigMigrator configMigrator = new ConfigMigrator(this);
+        configMigrator.migrateIfNeeded();
+        configMigrator.migrateMessages();
         
         // Initialize utilities
         this.messageUtil = new MessageUtil(this);
@@ -77,6 +85,10 @@ public class RentABot extends JavaPlugin {
         
         // Start tasks
         startTasks();
+        
+        // Check for updates
+        this.updateChecker = new UpdateChecker(this, "MubTaXim", "RentABot");
+        updateChecker.checkForUpdates();
         
         // Startup message
         getLogger().info("╔════════════════════════════════════════╗");
@@ -253,6 +265,10 @@ public class RentABot extends JavaPlugin {
     
     public boolean isEssentialsEnabled() {
         return essentialsEnabled;
+    }
+    
+    public UpdateChecker getUpdateChecker() {
+        return updateChecker;
     }
     
     public void debug(String message) {

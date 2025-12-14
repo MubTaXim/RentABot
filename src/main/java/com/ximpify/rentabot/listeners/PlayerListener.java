@@ -31,6 +31,15 @@ public class PlayerListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         
+        // Notify admins about updates
+        if (player.hasPermission("rentabot.admin.notify") && plugin.getUpdateChecker() != null) {
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline()) {
+                    plugin.getUpdateChecker().notifyPlayer(player);
+                }
+            }, 60L); // 3 seconds delay
+        }
+        
         // Check if player has any active bots
         var bots = plugin.getBotManager().getPlayerBots(player.getUniqueId());
         
@@ -54,7 +63,7 @@ public class PlayerListener implements Listener {
                     plugin.getMessageUtil().sendRaw(player, 
                         "&8&m-----------------------------");
                 }
-            }, 40L); // 2 seconds delay
+            }, 80L); // 4 seconds delay (after update notification)
         }
     }
     

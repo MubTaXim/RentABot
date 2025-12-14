@@ -6,6 +6,22 @@
 # Support: https://discord.ximpify.com
 # ============================================================
 
+# DO NOT CHANGE THIS - Used for automatic config migration
+config-version: 3
+
+# ========================
+#    Update Checker
+# ========================
+updates:
+  # Check for updates on startup
+  check-for-updates: true
+  
+  # Notify admins (with rentabot.admin.notify permission) about updates
+  notify-admins: true
+  
+  # Notify admins when they join the server
+  notify-on-join: true
+
 # ========================
 #    Server Connection
 # ========================

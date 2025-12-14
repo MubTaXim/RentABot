@@ -22,6 +22,7 @@ import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.Serverbound
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.level.ServerboundAcceptTeleportationPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.level.ServerboundPlayerInputPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerPosRotPacket;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerRotPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundSwingPacket;
 
 import java.time.Instant;
@@ -276,15 +277,17 @@ public class RentableBot {
                 float newPitch = pitch + (float) (Math.random() * 20 - 10);
                 // Clamp pitch to valid range
                 newPitch = Math.max(-90, Math.min(90, newPitch));
-                session.send(new ServerboundMovePlayerPosRotPacket(true, false, x, y, z, newYaw, newPitch));
+                // Use rotation-only packet for look action (more reliable)
+                session.send(new ServerboundMovePlayerRotPacket(true, false, newYaw, newPitch));
                 this.yaw = newYaw;
                 this.pitch = newPitch;
+                plugin.debug("Bot '" + internalName + "' looked to yaw=" + newYaw + ", pitch=" + newPitch);
                 
                 // Look back after a moment (like BotHive does)
                 plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
                     if (connected.get() && session != null) {
                         float returnYaw = yaw - (float) (Math.random() * 20 - 10);
-                        session.send(new ServerboundMovePlayerPosRotPacket(true, false, x, y, z, returnYaw, pitch));
+                        session.send(new ServerboundMovePlayerRotPacket(true, false, returnYaw, pitch));
                         this.yaw = returnYaw;
                     }
                 }, 20L); // 1 second later
@@ -292,20 +295,57 @@ public class RentableBot {
             case "sneak" -> {
                 // Start sneaking using player input packet (1.21+ method)
                 // ServerboundPlayerInputPacket: forward, backward, left, right, jump, shift, sprint
+                // Send input packet with shift=true to indicate sneaking
                 session.send(new ServerboundPlayerInputPacket(false, false, false, false, false, true, false));
-                // Also send position update with sneak to make it visually register
-                session.send(new ServerboundMovePlayerPosRotPacket(true, false, x, y, z, yaw, pitch));
-                plugin.debug("Bot '" + internalName + "' started sneaking");
+                plugin.debug("Bot '" + internalName + "' started sneaking (shift input sent)");
                 
-                // Stop sneaking after 1-3 seconds
-                long sneakDuration = (long) (20 + Math.random() * 40);
-                plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-                    if (connected.get() && session != null) {
-                        session.send(new ServerboundPlayerInputPacket(false, false, false, false, false, false, false));
-                        session.send(new ServerboundMovePlayerPosRotPacket(true, false, x, y, z, yaw, pitch));
-                        plugin.debug("Bot '" + internalName + "' stopped sneaking");
+                // Make small movements while sneaking to ensure server registers the sneak visually
+                // Sneak speed is ~0.0663 blocks per tick
+                final double originalX = x;
+                final double originalZ = z;
+                final double sneakSpeed = 0.0663;
+                
+                // Move forward slightly while sneaking (3-5 steps)
+                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                    try {
+                        double radians = Math.toRadians(yaw);
+                        double dx = -Math.sin(radians) * sneakSpeed;
+                        double dz = Math.cos(radians) * sneakSpeed;
+                        double currentX = x;
+                        double currentZ = z;
+                        
+                        int steps = 3 + (int)(Math.random() * 3); // 3-5 steps
+                        for (int i = 0; i < steps && connected.get() && session != null; i++) {
+                            currentX += dx;
+                            currentZ += dz;
+                            // Send position with shift input active
+                            session.send(new ServerboundPlayerInputPacket(true, false, false, false, false, true, false));
+                            session.send(new ServerboundMovePlayerPosRotPacket(true, false, currentX, y, currentZ, yaw, pitch));
+                            Thread.sleep(50); // ~1 tick
+                        }
+                        
+                        // Pause sneaking for a moment
+                        Thread.sleep(200 + (long)(Math.random() * 300));
+                        
+                        // Return to original position while sneaking
+                        for (int i = 0; i < steps && connected.get() && session != null; i++) {
+                            currentX -= dx;
+                            currentZ -= dz;
+                            session.send(new ServerboundPlayerInputPacket(false, true, false, false, false, true, false));
+                            session.send(new ServerboundMovePlayerPosRotPacket(true, false, currentX, y, currentZ, yaw, pitch));
+                            Thread.sleep(50);
+                        }
+                        
+                        // Stop sneaking
+                        if (connected.get() && session != null) {
+                            session.send(new ServerboundPlayerInputPacket(false, false, false, false, false, false, false));
+                            session.send(new ServerboundMovePlayerPosRotPacket(true, false, originalX, y, originalZ, yaw, pitch));
+                            plugin.debug("Bot '" + internalName + "' stopped sneaking");
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                     }
-                }, sneakDuration);
+                });
             }
             case "jump" -> {
                 // Simulate jump with actual position packets (server physics simulation)
@@ -381,11 +421,11 @@ public class RentableBot {
             }
             case "combo", "all" -> {
                 // Do multiple actions at once for maximum anti-AFK bypass
-                // 1. Look around
+                // 1. Look around (use rotation-only packet)
                 float newYaw = yaw + (float) (RANDOM.nextDouble() * 40 - 20);
                 float newPitch = pitch + (float) (RANDOM.nextDouble() * 20 - 10);
                 newPitch = Math.max(-90, Math.min(90, newPitch));
-                session.send(new ServerboundMovePlayerPosRotPacket(true, false, x, y, z, newYaw, newPitch));
+                session.send(new ServerboundMovePlayerRotPacket(true, false, newYaw, newPitch));
                 this.yaw = newYaw;
                 this.pitch = newPitch;
                 

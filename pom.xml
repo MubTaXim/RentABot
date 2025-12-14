@@ -6,7 +6,7 @@
 
     <groupId>com.ximpify</groupId>
     <artifactId>RentABot</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <packaging>jar</packaging>
 
     <name>RentABot</name>
@@ -122,10 +122,18 @@
             <scope>compile</scope>
         </dependency>
         
-        <!-- SLF4J API (required by HikariCP) -->
+        <!-- SLF4J API (required by HikariCP and MCProtocolLib) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+            <version>2.0.9</version>
+            <scope>compile</scope>
+        </dependency>
+        
+        <!-- SLF4J Simple Provider - prevents "No SLF4J providers found" warnings -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
             <version>2.0.9</version>
             <scope>compile</scope>
         </dependency>
