@@ -1,0 +1,174 @@
+# ============================================================
+#                    RentABot Messages
+#              All messages are fully customizable!
+# ============================================================
+# Placeholders:
+#   %player% - Player name
+#   %bot% - Bot name
+#   %hours% - Rental hours
+#   %time% - Time remaining
+#   %price% - Price
+#   %balance% - Player balance
+#   %count% - Bot count
+#   %max% - Maximum bots
+#   %reason% - Reason for action
+# 
+# Color codes: &a, &b, &c, etc. or hex: &#FF5555
+# ============================================================
+
+# Message prefix (used before most messages)
+prefix: "&#00D4FF&lRentABot &8» &7"
+
+# ========================
+#    General Messages
+# ========================
+general:
+  no-permission: "&cYou don't have permission to do that!"
+  player-only: "&cThis command can only be used by players!"
+  invalid-args: "&cInvalid arguments! Use &f/rentabot help &cfor help."
+  bot-not-found: "&cBot '%bot%' not found!"
+  player-not-found: "&cPlayer '%player%' not found!"
+  reload-success: "&aConfiguration reloaded successfully!"
+  plugin-disabled: "&cRentABot is currently disabled!"
+
+# ========================
+#    Economy Messages
+# ========================
+economy:
+  not-enough-money: "&cYou don't have enough money! You need &f%price% &cbut only have &f%balance%&c."
+  charged: "&aYou have been charged &f%price% &afor your bot rental."
+  refunded: "&aYou have been refunded &f%price% &afor stopping your bot early."
+  economy-disabled: "&cEconomy is not available! Please contact an administrator."
+  free-rental: "&aThis bot rental is free!"
+
+# ========================
+#    Bot Creation
+# ========================
+create:
+  success: |
+    &a&lBot Created Successfully!
+    &7Bot Name: &f%bot%
+    &7Duration: &f%hours% hour(s)
+    &7Cost: &f%price%
+    &7
+    &7Use &f/rentabot tp %bot% &7to summon your bot!
+  
+  failed: "&cFailed to create bot: %reason%"
+  already-connecting: "&cA bot is already being created. Please wait..."
+  limit-reached: "&cYou've reached your bot limit! (%count%/%max%)"
+  server-limit: "&cThe server has reached the maximum bot limit!"
+  cooldown: "&cPlease wait &f%time% &cbefore creating another bot."
+  invalid-hours: "&cInvalid hours! Must be between %min% and %max%."
+  invalid-name: "&cInvalid bot name! %reason%"
+  name-taken: "&cThat bot name is already taken!"
+  blocked-word: "&cBot name contains a blocked word!"
+
+# ========================
+#    Bot Management
+# ========================
+stop:
+  success: "&aBot '%bot%' has been stopped."
+  not-owner: "&cYou don't own this bot!"
+  already-stopped: "&cThis bot is already stopped!"
+
+list:
+  header: "&8&m----------&r &#00D4FF&lYour Bots &8&m----------"
+  entry: "&7• &f%bot% &8- &a%time% remaining &8- &7%status%"
+  empty: "&7You don't have any active bots."
+  footer: "&8&m--------------------------------"
+  status-online: "&#00FF00Online"
+  status-offline: "&#FF0000Offline"
+  status-connecting: "&#FFFF00Connecting..."
+
+# Bot info/status display
+info:
+  header: "&8&m----------&r &#00D4FF&lBot Status &8&m----------"
+  health: "&7Health: &c%hearts% &8| &7Food: &e%food%"
+  position: "&7Position: &f%world% (%x%, %y%, %z%)"
+  spawn-set: "&7Spawn Point: &a%world% (%x%, %y%, %z%)"
+  spawn-none: "&7Spawn Point: &8Not set (use /tpahere)"
+  uptime: "&7Uptime: &f%uptime%"
+  footer: "&8&m--------------------------------"
+
+rename:
+  success: "&aBot renamed from '%old%' to '%bot%'!"
+  same-name: "&cThe bot already has that name!"
+
+tp:
+  success: "&aBot '%bot%' has been teleported to you!"
+  failed: "&cFailed to teleport bot: %reason%"
+  not-same-world: "&cThe bot must be in the same world as you!"
+  cooldown: "&cPlease wait &f%time% &cbefore teleporting again."
+
+extend:
+  success: "&aRental extended by &f%hours% &ahour(s)! New expiry: &f%time%"
+  failed: "&cFailed to extend rental: %reason%"
+  max-reached: "&cCannot extend beyond maximum rental duration!"
+
+# ========================
+#    TPA Messages
+# ========================
+tpa:
+  accepted: "&aBot '%bot%' accepted TPA request from %player%."
+  denied: "&cBot '%bot%' denied TPA request from %player%."
+  owner-only: "&7Bots only accept TPA from their owner."
+
+# ========================
+#    Notifications
+# ========================
+notifications:
+  expiry-warning: "&e&lWarning! &7Your bot '%bot%' will expire in &f%time%&7!"
+  expired: "&c&lExpired! &7Your bot '%bot%' has been removed."
+  disconnected: "&e&lDisconnected! &7Your bot '%bot%' lost connection. Attempting to reconnect..."
+  reconnected: "&a&lReconnected! &7Your bot '%bot%' is back online."
+  reconnect-failed: "&c&lFailed! &7Your bot '%bot%' could not reconnect after %attempts% attempts."
+  kicked: "&e&lKicked! &7Your bot '%bot%' was kicked: %reason%"
+  bot-died: "&e&lDeath! &7Your bot '%bot%' died and is respawning..."
+
+# ========================
+#    Admin Messages
+# ========================
+admin:
+  list-header: "&8&m----------&r &#00D4FF&lAll Bots &8&m----------"
+  list-entry: "&7• &f%bot% &8- &7Owner: &f%player% &8- &a%time%"
+  list-empty: "&7No active bots on the server."
+  
+  stop-success: "&aBot '%bot%' (owned by %player%) has been stopped."
+  stopall-success: "&aStopped all &f%count% &abots!"
+  stopall-empty: "&7No bots to stop."
+  
+  info-header: "&8&m----------&r &#00D4FF&lBot Info &8&m----------"
+  info-name: "&7Name: &f%bot%"
+  info-owner: "&7Owner: &f%player%"
+  info-created: "&7Created: &f%time%"
+  info-expires: "&7Expires: &f%time%"
+  info-location: "&7Location: &f%world% (%x%, %y%, %z%)"
+  info-status: "&7Status: %status%"
+
+# ========================
+#    Help Messages
+# ========================
+help:
+  header: "&8&m----------&r &#00D4FF&lRentABot Help &8&m----------"
+  commands:
+    - "&f/rentabot &8- &7Open the main GUI menu"
+    - "&f/rentabot create <hours> [name] &8- &7Create a new bot"
+    - "&f/rentabot stop <name> &8- &7Stop and remove a bot"
+    - "&f/rentabot list &8- &7List your active bots"
+    - "&f/rentabot tp <name> &8- &7Teleport a bot to you"
+    - "&f/rentabot rename <name> <newname> &8- &7Rename a bot"
+    - "&f/rentabot extend <name> <hours> &8- &7Extend rental time"
+    - "&f/rentabot shop &8- &7Open the rental shop"
+    - "&f/rentabot reload &8- &7Reload config &c(Admin)"
+    - "&f/rentabot help &8- &7Show this help message"
+  footer: "&8&m------------------------------------"
+  
+  admin-header: "&8&m----------&r &#FF5555&lAdmin Help &8&m----------"
+  admin-commands:
+    - "&f/rabadmin list &8- &7List all bots"
+    - "&f/rabadmin stop <name> &8- &7Force stop any bot"
+    - "&f/rabadmin stopall &8- &7Stop all bots"
+    - "&f/rabadmin info <name> &8- &7Get bot information"
+    - "&f/rabadmin give <player> <hours> [name] &8- &7Give bot (free)"
+    - "&f/rabadmin reload &8- &7Reload configuration"
+  admin-footer: "&8&m------------------------------------"

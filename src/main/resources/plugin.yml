@@ -1,0 +1,74 @@
+name: RentABot
+version: ${project.version}
+main: com.ximpify.rentabot.RentABot
+api-version: '1.21'
+author: Ximpify
+description: Rent bot players for AFK farms - Trigger mob spawning, load chunks, boost your farms!
+website: https://ximpify.com
+
+softdepend:
+  - Vault
+  - PlaceholderAPI
+  - Essentials
+  - ShopGUIPlus
+
+commands:
+  rentabot:
+    description: Main command for RentABot
+    usage: /<command> <create|stop|list|tp|rename|help>
+    aliases: [rab, rbot, afkbot]
+  rentabotadmin:
+    description: Admin commands for RentABot
+    usage: /<command> <list|stop|stopall|reload|info>
+    aliases: [raba, rabadmin]
+
+permissions:
+  rentabot.*:
+    description: All RentABot permissions
+    default: op
+    children:
+      rentabot.use: true
+      rentabot.create: true
+      rentabot.stop: true
+      rentabot.list: true
+      rentabot.tp: true
+      rentabot.rename: true
+      rentabot.bypass.limit: true
+      rentabot.bypass.cooldown: true
+      rentabot.admin: true
+  
+  rentabot.use:
+    description: Basic permission to use RentABot
+    default: true
+  
+  rentabot.create:
+    description: Permission to create/rent bots
+    default: true
+  
+  rentabot.stop:
+    description: Permission to stop own bots
+    default: true
+  
+  rentabot.list:
+    description: Permission to list own bots
+    default: true
+  
+  rentabot.tp:
+    description: Permission to teleport bots
+    default: true
+  
+  rentabot.rename:
+    description: Permission to rename bots
+    default: true
+  
+  rentabot.bypass.limit:
+    description: Bypass the bot limit
+    default: op
+  
+  rentabot.bypass.cooldown:
+    description: Bypass rental cooldown
+    default: op
+  
+  rentabot.admin:
+    description: Admin permissions
+    default: op

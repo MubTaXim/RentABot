@@ -1,0 +1,209 @@
+# ============================================================
+#            ShopGUIPlus Integration for RentABot
+# ============================================================
+# Add this to your ShopGUIPlus shops folder as a new shop
+# or add the items to an existing shop.
+#
+# File location: plugins/ShopGUIPlus/shops/rentabot.yml
+#
+# IMPORTANT: This uses console commands (rabadmin give) which
+# do NOT charge the player - ShopGUIPlus handles the payment!
+# Set your prices here, NOT in RentABot's config.yml
+# ============================================================
+
+# Shop menu settings
+menu:
+  title: "&8&lRent AFK Bots"
+  rows: 4
+  fillWithWool: false
+  
+# Shop items
+items:
+  # 1 Hour Bot Rental
+  1hour:
+    item:
+      material: COAL
+      name: "&a&l1 Hour Bot"
+      lore:
+        - "&7Rent an AFK bot for 1 hour"
+        - ""
+        - "&7Perfect for quick AFK sessions"
+        - "&7Bot will stay at your farm location"
+        - ""
+        - "&ePrice: &f$500"
+        - ""
+        - "&a▶ Click to purchase"
+    slot: 10
+    buyPrice: 500
+    commands:
+      - "console: rabadmin give %player% 1"
+    
+  # 6 Hours Bot Rental
+  6hours:
+    item:
+      material: IRON_INGOT
+      name: "&a&l6 Hour Bot"
+      lore:
+        - "&7Rent an AFK bot for 6 hours"
+        - ""
+        - "&7Good for overnight farming"
+        - "&7Bot will stay at your farm location"
+        - ""
+        - "&ePrice: &f$2,500"
+        - "&a(Save $500!)"
+        - ""
+        - "&a▶ Click to purchase"
+    slot: 11
+    buyPrice: 2500
+    commands:
+      - "console: rabadmin give %player% 6"
+    
+  # 12 Hours Bot Rental  
+  12hours:
+    item:
+      material: GOLD_INGOT
+      name: "&e&l12 Hour Bot"
+      lore:
+        - "&7Rent an AFK bot for 12 hours"
+        - ""
+        - "&7Half-day farm automation"
+        - "&7Bot will stay at your farm location"
+        - ""
+        - "&ePrice: &f$4,500"
+        - "&a(Save $1,500!)"
+        - ""
+        - "&a▶ Click to purchase"
+    slot: 12
+    buyPrice: 4500
+    commands:
+      - "console: rabadmin give %player% 12"
+    
+  # 24 Hours (1 Day) Bot Rental
+  1day:
+    item:
+      material: DIAMOND
+      name: "&b&l1 Day Bot"
+      lore:
+        - "&7Rent an AFK bot for 24 hours"
+        - ""
+        - "&b⭐ Popular Choice!"
+        - "&7Full day of farm automation"
+        - "&7Bot will stay at your farm location"
+        - ""
+        - "&ePrice: &f$8,000"
+        - "&a(Save $4,000!)"
+        - ""
+        - "&a▶ Click to purchase"
+    slot: 13
+    buyPrice: 8000
+    commands:
+      - "console: rabadmin give %player% 24"
+    
+  # 3 Days Bot Rental
+  3days:
+    item:
+      material: EMERALD
+      name: "&a&l3 Day Bot"
+      lore:
+        - "&7Rent an AFK bot for 72 hours"
+        - ""
+        - "&7Weekend farming package"
+        - "&7Bot will stay at your farm location"
+        - ""
+        - "&ePrice: &f$20,000"
+        - "&a(Save $16,000!)"
+        - ""
+        - "&a▶ Click to purchase"
+    slot: 14
+    buyPrice: 20000
+    commands:
+      - "console: rabadmin give %player% 72"
+    
+  # 1 Week Bot Rental
+  1week:
+    item:
+      material: NETHER_STAR
+      name: "&d&l1 Week Bot &6⭐"
+      lore:
+        - "&7Rent an AFK bot for 168 hours"
+        - ""
+        - "&d✦ BEST VALUE! ✦"
+        - "&7Full week of farm automation"
+        - "&7Bot will stay at your farm location"
+        - ""
+        - "&ePrice: &f$50,000"
+        - "&a(Save $34,000!)"
+        - ""
+        - "&a▶ Click to purchase"
+    slot: 16
+    buyPrice: 50000
+    commands:
+      - "console: rabadmin give %player% 168"
+    
+  # Info Item
+  info:
+    item:
+      material: BOOK
+      name: "&e&lHow it Works"
+      lore:
+        - "&7&m----------------------"
+        - "&f1. &7Purchase a bot rental"
+        - "&f2. &7Use &f/tpahere <bot> &7to summon"
+        - "&f3. &7Bot stays AFK at location"
+        - "&f4. &7Keeps chunks loaded!"
+        - "&7&m----------------------"
+        - ""
+        - "&7Bot will respawn if killed"
+        - "&7and return to your farm!"
+        - ""
+        - "&eUse &f/rentabot &eto manage bots"
+    slot: 31
+    
+  # Back Button (if this is a sub-shop)
+  back:
+    item:
+      material: ARROW
+      name: "&7&lBack"
+      lore:
+        - "&7Return to main shop"
+    slot: 27
+    commands:
+      - "shop"
+
+
+# ============================================================
+#                    ALTERNATIVE: Main Shop Entry
+# ============================================================
+# If you want to add RentABot to your existing main shop,
+# add this item configuration to your main shop YAML:
+#
+# rentabot_shop:
+#   item:
+#     material: PLAYER_HEAD
+#     skull: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjE4NDlhNTYzY2Q5YjdjYzVlOWI1M2ZhMzI3YmRhOGFkYzNjNjYxMjk3MmNjZGZiMzJmNzg5OTFlMjcwOSJ9fX0="
+#     name: "&a&lAFK Bots"
+#     lore:
+#       - "&7Rent bots for your farms!"
+#       - ""
+#       - "&7Bots will AFK at your farm"
+#       - "&7and keep chunks loaded"
+#       - ""
+#       - "&eClick to view rental options"
+#   slot: 15
+#   shop: "rentabot"
+# ============================================================
+
+
+# ============================================================
+#                 COMMAND REFERENCE
+# ============================================================
+# The console command format is:
+#   rabadmin give <player> <hours> [botname]
+#
+# Examples:
+#   rabadmin give Steve 24           → Creates "Steve_Bot1" for 24h
+#   rabadmin give Steve 24 MyBot     → Creates "MyBot" for 24h
+#
+# This command does NOT charge the player - payment is handled
+# by ShopGUIPlus when they click the item!
+# ============================================================

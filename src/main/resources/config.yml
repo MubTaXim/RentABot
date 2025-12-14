@@ -1,0 +1,287 @@
+# ============================================================
+#                      RentABot Configuration
+#                    Rent bots for AFK farms!
+# ============================================================
+# Documentation: https://github.com/ximpify/rentabot/wiki
+# Support: https://discord.ximpify.com
+# ============================================================
+
+# ========================
+#    Server Connection
+# ========================
+server:
+  # The address bots will connect to
+  # Use 'localhost' for normal setups (recommended)
+  # Only change if using BungeeCord/Velocity or remote connection
+  host: "localhost"
+  
+  # The port your Minecraft server runs on
+  # Set to -1 to auto-detect from server (recommended)
+  # Only set a specific port for proxy or custom network setups
+  port: -1
+  
+  # Protocol version (leave auto for automatic detection)
+  # Supported: auto, 1.21.4, 1.21.3, 1.21, 1.20.6, 1.20.4
+  version: "auto"
+
+# ========================
+#     Economy Settings
+# ========================
+economy:
+  # Enable economy integration (requires Vault)
+  enabled: true
+  
+  # Cost per hour of bot rental
+  price-per-hour: 5000
+  
+  # Minimum rental duration (hours)
+  min-hours: 1
+  
+  # Maximum rental duration (hours)
+  max-hours: 168  # 1 week
+  
+  # Refund percentage when manually stopping a bot early (0-100)
+  # Set to 0 to disable refunds
+  refund-percentage: 50
+  
+  # Currency symbol for messages
+  currency-symbol: "$"
+
+# ========================
+#     Bot Limits
+# ========================
+limits:
+  # Maximum bots per player (0 = unlimited)
+  max-bots-per-player: 3
+  
+  # Maximum total bots on the server (0 = unlimited)
+  max-total-bots: 50
+  
+  # Cooldown between creating bots (seconds)
+  # Prevents spam creation
+  creation-cooldown: 60
+  
+  # Maximum bots that can be in the same chunk
+  max-bots-per-chunk: 2
+
+# ========================
+#     Bot Behavior
+# ========================
+bots:
+  # Bot naming configuration
+  naming:
+    # Prefix for all bot names
+    # IMPORTANT: Only use valid Minecraft username characters: a-z, A-Z, 0-9, _
+    # Brackets, spaces, and special characters are NOT allowed!
+    # Examples: "Bot_", "RAB_", "AFK_"
+    prefix: "Bot_"
+    
+    # Suffix for all bot names
+    # Same rules as prefix - only [a-zA-Z0-9_] allowed
+    suffix: ""
+    
+    # Allow players to set custom names
+    allow-custom-names: true
+    
+    # Minimum name length (excluding prefix/suffix)
+    min-length: 3
+    
+    # Maximum name length (for custom names - auto-generated can be longer)
+    # Minecraft usernames max is 16, internal names can be up to 32
+    max-length: 16
+    
+    # Blocked words in bot names (case-insensitive)
+    blocked-words:
+      - "admin"
+      - "mod"
+      - "owner"
+      - "staff"
+      - "server"
+      - "console"
+  
+  # Bot behavior settings
+  behavior:
+    # Accept TPA requests from the bot owner
+    accept-owner-tpa: true
+    
+    # Accept TPAHere requests from the bot owner
+    accept-owner-tpahere: true
+    
+    # Automatically deny TPA from non-owners
+    deny-others-tpa: true
+    
+    # Return to spawn point after death
+    # When bot dies and respawns, it will teleport back to its saved location
+    # The spawn point is saved when owner uses TPA/TPAHere
+    return-after-death: true
+    
+    # TPA detection patterns (case-insensitive)
+    # Bot will accept TPA if message contains ANY of these patterns
+    # Use %player% as placeholder for any player name
+    tpa-patterns:
+      - "teleport to you"
+      - "teleport request"
+      - "has requested to teleport"
+      - "wants to teleport to you"
+      - "sent you a teleport request"
+    
+    # TPAHere detection patterns
+    tpahere-patterns:
+      - "teleport to them"
+      - "you teleport to"
+      - "requests that you teleport"
+      - "wants you to teleport"
+    
+    # Anti-AFK movement (prevents server AFK kick)
+    anti-afk:
+      enabled: true
+      # Movement interval in seconds
+      interval: 60
+      # Type: look, sneak, jump, move
+      type: "look"
+    
+    # Auto-reconnect if bot disconnects
+    auto-reconnect:
+      enabled: true
+      # Delay before reconnecting (seconds)
+      delay: 10
+      # Maximum reconnection attempts (0 = unlimited)
+      max-attempts: 5
+    
+    # Bot will hold position and not move
+    stay-in-place: true
+
+# ========================
+#    Rental Settings
+# ========================
+rentals:
+  # Allow extending existing rentals
+  allow-extend: true
+  
+  # Send notifications before rental expires
+  expiry-warnings:
+    enabled: true
+    # Minutes before expiry to warn
+    times:
+      - 60    # 1 hour
+      - 30    # 30 minutes
+      - 10    # 10 minutes
+      - 5     # 5 minutes
+      - 1     # 1 minute
+  
+  # What happens when rental expires
+  on-expiry:
+    # Kick the bot from server
+    kick-bot: true
+    # Send message to owner (if online)
+    notify-owner: true
+    # Grace period before kick (seconds)
+    grace-period: 60
+
+# ========================
+#   Storage Settings
+# ========================
+storage:
+  # Storage type: sqlite, mysql
+  type: "sqlite"
+  
+  # SQLite settings (if type is sqlite)
+  sqlite:
+    file: "rentals.db"
+  
+  # MySQL settings (if type is mysql)
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "rentabot"
+    username: "root"
+    password: ""
+    # Connection pool settings
+    pool:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+# ========================
+#    Integration Hooks
+# ========================
+hooks:
+  # AuthMe integration (IMPORTANT for login protection servers)
+  authme:
+    enabled: true
+    # How bots authenticate with AuthMe
+    # Options: 
+    #   - "auto-register" - Auto register bots with generated password
+    #   - "pre-registered" - Bots must be pre-registered (manual)
+    #   - "disabled" - No AuthMe handling (only if server doesn't use AuthMe)
+    mode: "auto-register"
+    # Default password for auto-registered bots (change this!)
+    default-password: "RentABot2024!"
+    # Delay before sending /login command (ticks, 20 = 1 second)
+    login-delay: 40
+  
+  # Essentials integration
+  essentials:
+    enabled: true
+    # Use Essentials for TPA handling
+    use-tpa: true
+  
+  # PlaceholderAPI integration
+  placeholderapi:
+    enabled: true
+  
+  # ShopGUIPlus integration
+  shopguiplus:
+    enabled: true
+    # Shop item IDs for different rental durations
+    # Configure these in ShopGUIPlus to use command: rentabot create %player% <hours>
+    # Example shop item command: [CONSOLE] rentabot create %player% 1
+
+# ========================
+#   Notification Settings
+# ========================
+notifications:
+  # Notify on bot creation
+  on-create: true
+  
+  # Notify on bot stop
+  on-stop: true
+  
+  # Notify on bot disconnect (network issues)
+  on-disconnect: true
+  
+  # Notify on bot reconnect
+  on-reconnect: true
+  
+  # Sound effects
+  sounds:
+    enabled: true
+    on-create: "ENTITY_PLAYER_LEVELUP"
+    on-stop: "ENTITY_VILLAGER_NO"
+    on-warning: "BLOCK_NOTE_BLOCK_PLING"
+
+# ========================
+#   Advanced Settings
+# ========================
+advanced:
+  # Debug mode (verbose logging)
+  debug: false
+  
+  # Bot check interval (seconds)
+  # How often to check bot status and rental expiry
+  check-interval: 30
+  
+  # Connection timeout (milliseconds)
+  connection-timeout: 30000
+  
+  # Read timeout (milliseconds)
+  read-timeout: 30000
+  
+  # Use proxy for bot connections
+  proxy:
+    enabled: false
+    type: "SOCKS5"  # SOCKS4, SOCKS5, HTTP
+    host: ""
+    port: 1080
+    username: ""
+    password: ""
