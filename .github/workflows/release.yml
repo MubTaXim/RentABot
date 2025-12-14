@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+    
+    - name: Build with Maven
+      run: mvn clean package -B
+    
+    - name: Get version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: RentABot ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          target/RentABot-*.jar
+        body: |
+          ## RentABot ${{ github.ref_name }}
+          
+          ### Installation
+          1. Download `RentABot-${{ steps.get_version.outputs.VERSION }}.jar`
+          2. Place in your `plugins` folder
+          3. Restart server
+          4. Configure `plugins/RentABot/config.yml`
+          
+          ### Requirements
+          - Paper/Spigot 1.21+
+          - Java 17+
+          - Vault (required)
+          - Optional: AuthMe, PlaceholderAPI, ShopGUIPlus
