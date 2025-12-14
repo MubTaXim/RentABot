@@ -69,6 +69,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
             case "info", "status" -> handleInfo(player, args);
             case "shop", "buy" -> plugin.getGUIManager().openShopMenu(player);
             case "help", "?" -> showHelp(player);
+            case "version", "ver", "v" -> showVersion(player);
             default -> plugin.getMessageUtil().send(player, "general.invalid-args");
         }
         
@@ -381,6 +382,21 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         plugin.getMessageUtil().send(player, "help.footer");
     }
     
+    private void showVersion(Player player) {
+        String version = plugin.getDescription().getVersion();
+        int totalBots = plugin.getBotManager().getAllBots().size();
+        int connectedBots = (int) plugin.getBotManager().getAllBots().stream()
+            .filter(RentableBot::isConnected).count();
+        
+        plugin.getMessageUtil().sendRaw(player, "");
+        plugin.getMessageUtil().sendRaw(player, "&b&lRentABot &8- &7Bot Rental System");
+        plugin.getMessageUtil().sendRaw(player, "&7Version: &f" + version);
+        plugin.getMessageUtil().sendRaw(player, "&7Author: &fXimpify");
+        plugin.getMessageUtil().sendRaw(player, "&7Bots: &a" + connectedBots + " online &7/ &f" + totalBots + " total");
+        plugin.getMessageUtil().sendRaw(player, "&7GitHub: &fgithub.com/MubTaXim/RentABot");
+        plugin.getMessageUtil().sendRaw(player, "");
+    }
+    
     private void playSound(Player player, String soundKey) {
         if (plugin.getConfig().getBoolean("notifications.sounds.enabled", true)) {
             String soundName = plugin.getConfig().getString("notifications.sounds." + soundKey);
@@ -413,7 +429,7 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
         
         if (args.length == 1) {
-            completions.addAll(Arrays.asList("gui", "shop", "create", "stop", "list", "tp", "rename", "extend", "info", "help"));
+            completions.addAll(Arrays.asList("gui", "shop", "create", "stop", "list", "tp", "rename", "extend", "info", "help", "version"));
             // Add reload for admins
             if (player.hasPermission("rentabot.admin")) {
                 completions.add("reload");
