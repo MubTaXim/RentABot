@@ -125,13 +125,29 @@ public class GUIListener implements Listener {
         // Bot head clicked
         if (clicked.getType() == Material.PLAYER_HEAD) {
             String displayName = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(clicked.getItemMeta().displayName());
-            // Extract bot name from "BotName" format (plain text after serialization)
-            String botName = displayName;
+            // Extract bot name - strip color codes and formatting codes (§ followed by any char)
+            String botName = displayName.replaceAll("§[0-9a-fklmnor]", "").replaceAll("[§&][0-9a-fklmnor]", "").trim();
             
+            // Try to find bot - first try exact match, then try searching through player's bots
             Optional<RentableBot> optBot = plugin.getBotManager().getBot(botName);
+            
+            // If not found, search through player's bots by internal name
+            if (optBot.isEmpty()) {
+                for (RentableBot bot : plugin.getBotManager().getPlayerBots(player.getUniqueId())) {
+                    if (bot.getInternalName().equalsIgnoreCase(botName) || 
+                        bot.getDisplayName().equalsIgnoreCase(botName) ||
+                        bot.getInternalName().toLowerCase().contains(botName.toLowerCase())) {
+                        optBot = Optional.of(bot);
+                        break;
+                    }
+                }
+            }
+            
             if (optBot.isPresent()) {
                 player.closeInventory();
                 guiManager.openBotManageMenu(player, optBot.get());
+            } else {
+                plugin.getMessageUtil().send(player, "general.bot-not-found", "bot", botName);
             }
         }
     }
@@ -386,7 +402,10 @@ public class GUIListener implements Listener {
         if (slot == 11) { // Confirm
             player.closeInventory();
             guiManager.removePendingAction(player.getUniqueId());
-            action.onConfirm.run();
+            // Check for null onConfirm (can be null for resume actions)
+            if (action.onConfirm != null) {
+                action.onConfirm.run();
+            }
         } else if (slot == 15) { // Cancel
             player.closeInventory();
             guiManager.removePendingAction(player.getUniqueId());

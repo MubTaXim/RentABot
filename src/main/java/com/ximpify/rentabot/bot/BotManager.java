@@ -319,17 +319,25 @@ public class BotManager {
     
     /**
      * Renames a bot - disconnects and reconnects with new name.
+     * CRITICAL: Must wait for old connection to fully close before reconnecting.
      */
     public boolean renameBot(String oldName, String newName) {
         RentableBot bot = bots.remove(oldName.toLowerCase());
         if (bot != null) {
+            // Store old display name for server-side cleanup
+            String oldDisplayName = bot.getDisplayName();
+            
+            // Mark as renaming to prevent auto-reconnect during this process
+            bot.setRenaming(true);
+            
             // Disconnect the bot first (mark as manual so no reconnect message)
             bot.disconnect("Renaming bot");
             
             // Update both internal name and display name
             bot.setInternalName(newName);
-            bot.setDisplayName(sanitizeUsername(plugin.getConfig().getString("bots.naming.prefix", "Bot_") 
-                + newName + plugin.getConfig().getString("bots.naming.suffix", "")));
+            String newDisplayName = sanitizeUsername(plugin.getConfig().getString("bots.naming.prefix", "Bot_") 
+                + newName + plugin.getConfig().getString("bots.naming.suffix", ""));
+            bot.setDisplayName(newDisplayName);
             
             // Update database: delete old entry and save with new name
             plugin.getStorageManager().deleteRental(oldName);
@@ -338,13 +346,31 @@ public class BotManager {
             // Add back to bots map with new name
             bots.put(newName.toLowerCase(), bot);
             
-            // Reconnect with new name after longer delay to ensure old connection is fully closed
+            // CRITICAL FIX: Wait for the old player entity to be fully removed from server
+            // before attempting to connect with new name
             plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-                bot.resetForReconnect(); // Reset manuallyStopped flag
-                if (bot.connect()) {
-                    plugin.getLogger().info("Bot reconnecting with new name: " + bot.getDisplayName());
+                // Check if old player is still on server (shouldn't be, but verify)
+                boolean oldPlayerStillOnline = plugin.getServer().getOnlinePlayers().stream()
+                    .anyMatch(p -> p.getName().equalsIgnoreCase(oldDisplayName));
+                
+                if (oldPlayerStillOnline) {
+                    // Old player still connected - try to kick it
+                    plugin.getServer().getScheduler().runTask(plugin, () -> {
+                        var oldPlayer = plugin.getServer().getPlayer(oldDisplayName);
+                        if (oldPlayer != null) {
+                            oldPlayer.kick(net.kyori.adventure.text.Component.text("Bot renamed"));
+                            plugin.debug("Kicked stale bot player entity: " + oldDisplayName);
+                        }
+                    });
+                    
+                    // Wait additional time for kick to process
+                    plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
+                        reconnectAfterRename(bot);
+                    }, 60L); // Additional 3 seconds
+                } else {
+                    reconnectAfterRename(bot);
                 }
-            }, 60L); // 3 second delay to ensure clean disconnect
+            }, 100L); // 5 second initial delay (was 3s, increased for safety)
             
             return true;
         }
@@ -352,10 +378,33 @@ public class BotManager {
     }
     
     /**
+     * Helper method to reconnect bot after rename with proper session cleanup.
+     */
+    private void reconnectAfterRename(RentableBot bot) {
+        // Clear renaming flag
+        bot.setRenaming(false);
+        
+        // CRITICAL: Force create a fresh session by clearing the old one
+        bot.clearSession();
+        
+        // Reset reconnect state
+        bot.resetForReconnect();
+        
+        // Now attempt to connect with new name
+        if (bot.connect()) {
+            plugin.getLogger().info("Bot reconnected with new name: " + bot.getDisplayName());
+        } else {
+            plugin.getLogger().warning("Failed to reconnect bot after rename: " + bot.getInternalName());
+        }
+    }
+    
+    /**
      * Checks status of all bots and handles disconnections.
      */
     public void checkBotStatus() {
-        for (RentableBot bot : bots.values()) {
+        // Create a copy of values to avoid ConcurrentModificationException
+        // since reconnect operations may modify the map
+        for (RentableBot bot : new java.util.ArrayList<>(bots.values())) {
             // Only try to reconnect active bots
             if (bot.getStatus() == BotStatus.ACTIVE && !bot.isConnected() && bot.shouldReconnect()) {
                 plugin.debug("Attempting to reconnect bot: " + bot.getInternalName());

@@ -192,6 +192,18 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         
         String botName = args[1];
         
+        // Verify bot exists and player owns it before proceeding
+        var optBot = plugin.getBotManager().getBot(botName);
+        if (optBot.isEmpty()) {
+            plugin.getMessageUtil().send(player, "general.bot-not-found", "bot", botName);
+            return;
+        }
+        
+        if (!optBot.get().getOwnerUUID().equals(player.getUniqueId())) {
+            plugin.getMessageUtil().send(player, "general.not-owner");
+            return;
+        }
+        
         // Check if additional hours provided
         int additionalHours = 0;
         if (args.length >= 3) {
@@ -210,9 +222,10 @@ public class RentCommand implements CommandExecutor, TabCompleter {
         RentalResult result = plugin.getRentalManager().resumeRental(player, botName, additionalHours);
         
         if (result.success()) {
-            var optBot = plugin.getBotManager().getBot(botName);
-            if (optBot.isPresent()) {
-                Duration remaining = Duration.between(Instant.now(), optBot.get().getExpiresAt());
+            // Re-fetch the bot to get updated expiry time after resume
+            var resumedBot = plugin.getBotManager().getBot(botName);
+            if (resumedBot.isPresent()) {
+                Duration remaining = Duration.between(Instant.now(), resumedBot.get().getExpiresAt());
                 String timeLeft = plugin.getRentalManager().formatTime(Math.max(0, remaining.toSeconds()));
                 plugin.getMessageUtil().send(player, "resume.success", "bot", botName, "time", timeLeft);
             } else {

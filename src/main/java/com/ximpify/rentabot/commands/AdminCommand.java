@@ -99,7 +99,8 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
         RentableBot bot = optBot.get();
         String ownerName = bot.getOwnerName();
         
-        plugin.getBotManager().stopBot(botName);
+        // Use deleteBot to fully remove the bot (not stopBot which only pauses)
+        plugin.getBotManager().deleteBot(botName);
         plugin.getStorageManager().deleteRental(botName);
         
         plugin.getMessageUtil().send(sender, "admin.stop-success", "bot", botName, "player", ownerName);
@@ -107,22 +108,24 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
         // Notify owner if online
         Player owner = plugin.getServer().getPlayer(bot.getOwnerUUID());
         if (owner != null) {
-            plugin.getMessageUtil().sendRaw(owner, "&c&lAdmin stopped your bot: &f" + botName);
+            plugin.getMessageUtil().sendRaw(owner, "&c&lAdmin removed your bot: &f" + botName);
         }
     }
     
     private void handleStopAll(CommandSender sender) {
-        int count = plugin.getBotManager().getTotalBotCount();
+        int count = plugin.getBotManager().getTotalAllBotsCount();
         
         if (count == 0) {
             plugin.getMessageUtil().send(sender, "admin.stopall-empty");
             return;
         }
         
-        // Stop all bots
+        // Stop all bots (use copy to avoid ConcurrentModificationException)
+        // Use deleteBot for full removal
         for (RentableBot bot : new ArrayList<>(plugin.getBotManager().getAllBots())) {
-            plugin.getBotManager().stopBot(bot.getInternalName());
-            plugin.getStorageManager().deleteRental(bot.getInternalName());
+            String botName = bot.getInternalName();
+            plugin.getBotManager().deleteBot(botName);
+            plugin.getStorageManager().deleteRental(botName);
         }
         
         plugin.getMessageUtil().send(sender, "admin.stopall-success", "count", String.valueOf(count));

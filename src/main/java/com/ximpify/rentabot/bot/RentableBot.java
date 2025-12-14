@@ -84,6 +84,12 @@ public class RentableBot {
     private long remainingSeconds; // Remaining time when stopped/paused
     private Instant lastActiveAt;  // Last time bot was active (for cleanup)
     
+    // Rename tracking - prevents reconnect during rename operation
+    private volatile boolean isRenaming = false;
+    
+    // Duplicate connection tracking - prevents infinite reconnect loops
+    private volatile boolean hasDuplicateError = false;
+    
     public RentableBot(RentABot plugin, String displayName, String internalName, 
                        UUID ownerUUID, String ownerName, int hours) {
         this.plugin = plugin;
@@ -111,6 +117,21 @@ public class RentableBot {
      */
     public boolean connect() {
         try {
+            // CRITICAL FIX: Always clear old session before creating new one
+            // This prevents the @Sharable Netty handler error
+            if (session != null) {
+                plugin.debug("Bot '" + internalName + "' clearing stale session before connect");
+                try {
+                    if (session.isConnected()) {
+                        session.disconnect(Component.text("Reconnecting"));
+                    }
+                } catch (Exception ignored) {}
+                session = null;
+            }
+            
+            // Reset duplicate error flag for fresh connection
+            hasDuplicateError = false;
+            
             // Auto-detect server host and port, with config override option
             String host = plugin.getConfig().getString("server.host", "localhost");
             int port = plugin.getConfig().getInt("server.port", -1);
@@ -124,13 +145,14 @@ public class RentableBot {
             // Create offline mode protocol (bot account)
             MinecraftProtocol protocol = new MinecraftProtocol(displayName);
             
-            // Create session using factory
+            // CRITICAL: Create a FRESH session instance every time
+            // Never reuse sessions - this causes Netty handler errors
             session = ClientNetworkSessionFactory.factory()
                 .setAddress(host, port)
                 .setProtocol(protocol)
                 .create();
             
-            // Add session listener
+            // Add NEW session listener (fresh instance to avoid handler reuse)
             session.addListener(new BotSessionListener());
             
             // Connect
@@ -141,6 +163,8 @@ public class RentableBot {
             
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to connect bot '" + internalName + "': " + e.getMessage());
+            // Clear session on failure to ensure clean state
+            session = null;
             return false;
         }
     }
@@ -152,13 +176,39 @@ public class RentableBot {
         // Mark as manually stopped to prevent auto-reconnect
         manuallyStopped.set(true);
         if (session != null) {
-            if (session.isConnected()) {
-                session.disconnect(Component.text(reason));
+            try {
+                if (session.isConnected()) {
+                    session.disconnect(Component.text(reason));
+                }
+            } catch (Exception e) {
+                plugin.debug("Error during disconnect for '" + internalName + "': " + e.getMessage());
+            } finally {
+                // CRITICAL: Clear the session reference to prevent reuse
+                // This fixes the @Sharable handler Netty error
+                session = null;
             }
-            // Clear the session reference to prevent reuse
+        }
+        connected.set(false);
+        positionInitialized = false;
+    }
+    
+    /**
+     * Clears the session completely for a fresh connection.
+     * MUST be called before reconnecting after rename or error.
+     */
+    public void clearSession() {
+        if (session != null) {
+            try {
+                if (session.isConnected()) {
+                    session.disconnect(Component.text("Session reset"));
+                }
+            } catch (Exception ignored) {}
             session = null;
         }
         connected.set(false);
+        positionInitialized = false;
+        // Reset duplicate error flag for fresh connection attempt
+        hasDuplicateError = false;
     }
     
     /**
@@ -167,6 +217,8 @@ public class RentableBot {
     public void resetForReconnect() {
         manuallyStopped.set(false);
         reconnectAttempts.set(0);
+        hasDuplicateError = false; // Clear duplicate error flag for fresh start
+        isRenaming = false; // Clear renaming flag
     }
     
     /**
@@ -190,6 +242,19 @@ public class RentableBot {
      * Checks if the bot should attempt to reconnect.
      */
     public boolean shouldReconnect() {
+        // CRITICAL: Don't reconnect during rename operation
+        if (isRenaming) {
+            plugin.debug("Bot '" + internalName + "' not reconnecting - rename in progress");
+            return false;
+        }
+        
+        // CRITICAL: Don't reconnect if we have a duplicate username error
+        // This prevents infinite reconnect spam when old entity is still on server
+        if (hasDuplicateError) {
+            plugin.debug("Bot '" + internalName + "' not reconnecting - duplicate username error");
+            return false;
+        }
+        
         // Don't reconnect if manually stopped by user/admin
         if (manuallyStopped.get()) {
             plugin.debug("Bot '" + internalName + "' not reconnecting - was manually stopped");
@@ -211,6 +276,20 @@ public class RentableBot {
         }
         
         return true;
+    }
+    
+    /**
+     * Sets whether the bot is currently being renamed.
+     */
+    public void setRenaming(boolean renaming) {
+        this.isRenaming = renaming;
+    }
+    
+    /**
+     * Checks if bot is being renamed.
+     */
+    public boolean isRenaming() {
+        return isRenaming;
     }
     
     /**
@@ -592,20 +671,36 @@ public class RentableBot {
                 : "Unknown";
             plugin.getLogger().info("Bot '" + internalName + "' disconnected: " + reason);
             
+            // CRITICAL FIX: Detect duplicate username errors more comprehensively
+            // This prevents infinite reconnect loops when old entity is still on server
+            boolean isDuplicateError = reason.toLowerCase().contains("same username") 
+                || reason.toLowerCase().contains("already playing")
+                || reason.toLowerCase().contains("name is already taken")
+                || reason.toLowerCase().contains("already connected")
+                || reason.toLowerCase().contains("logged in from another");
+            
+            if (isDuplicateError) {
+                hasDuplicateError = true;
+                plugin.getLogger().warning("Bot '" + internalName + "' duplicate username detected - stopping reconnect attempts");
+                // Don't set manuallyStopped - allow admin to fix and restart
+                return; // Exit early - don't notify or reconnect
+            }
+            
             // Check for permanent failures that should not trigger reconnect
             boolean permanentFailure = reason.contains("should join using username") 
-                || reason.contains("name is already taken")
                 || reason.contains("Invalid username")
-                || reason.contains("Kicked for spamming");
+                || reason.contains("Kicked for spamming")
+                || reason.contains("Banned")
+                || reason.contains("Whitelist");
             
             if (permanentFailure) {
                 manuallyStopped.set(true); // Prevent reconnect attempts
                 plugin.getLogger().warning("Bot '" + internalName + "' has a permanent issue and will not reconnect: " + reason);
             }
             
-            // Only notify owner and attempt reconnect if NOT manually stopped
+            // Only notify owner and attempt reconnect if NOT manually stopped and not renaming
             // (Manual stop = user stopped it or rental expired)
-            if (!manuallyStopped.get()) {
+            if (!manuallyStopped.get() && !isRenaming) {
                 // Notify owner if online about unexpected disconnect
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
                     var owner = plugin.getServer().getPlayer(ownerUUID);
