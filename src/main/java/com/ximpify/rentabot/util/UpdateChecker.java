@@ -32,11 +32,54 @@ public class UpdateChecker {
     private boolean downloadCompleted = false;
     private String downloadedFilePath = null;
     
+    // Periodic check task ID
+    private int periodicTaskId = -1;
+    
     public UpdateChecker(RentABot plugin, String githubOwner, String githubRepo) {
         this.plugin = plugin;
         this.githubOwner = githubOwner;
         this.githubRepo = githubRepo;
         this.currentVersion = plugin.getPluginMeta().getVersion();
+    }
+    
+    /**
+     * Starts the periodic update check task.
+     * Should be called after initial check on startup.
+     */
+    public void startPeriodicCheck() {
+        // Cancel existing task if any
+        stopPeriodicCheck();
+        
+        int intervalHours = plugin.getConfig().getInt("updates.check-interval-hours", 6);
+        if (intervalHours <= 0) {
+            plugin.debug("Periodic update check disabled (interval: " + intervalHours + ")");
+            return;
+        }
+        
+        // Convert hours to ticks (20 ticks/sec * 60 sec * 60 min * hours)
+        long intervalTicks = intervalHours * 72000L; // 20 * 60 * 60 = 72000 ticks per hour
+        
+        periodicTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+            if (!plugin.getConfig().getBoolean("updates.check-for-updates", true)) {
+                return;
+            }
+            
+            plugin.debug("Running periodic update check...");
+            checkForUpdates(); // Silent check, will notify admins if update found
+        }, intervalTicks, intervalTicks).getTaskId();
+        
+        plugin.debug("Periodic update check scheduled every " + intervalHours + " hours (task ID: " + periodicTaskId + ")");
+    }
+    
+    /**
+     * Stops the periodic update check task.
+     */
+    public void stopPeriodicCheck() {
+        if (periodicTaskId != -1) {
+            Bukkit.getScheduler().cancelTask(periodicTaskId);
+            periodicTaskId = -1;
+            plugin.debug("Periodic update check task cancelled");
+        }
     }
     
     /**

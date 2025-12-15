@@ -321,6 +321,17 @@ public class ReloadManager {
                 changes.add("Anti-AFK task: disabled");
             }
             
+            // Restart periodic update check with potentially new interval
+            if (plugin.getUpdateChecker() != null) {
+                plugin.getUpdateChecker().startPeriodicCheck();
+                int updateInterval = plugin.getConfig().getInt("updates.check-interval-hours", 6);
+                if (updateInterval > 0) {
+                    changes.add("Update check task: every " + updateInterval + " hours");
+                } else {
+                    changes.add("Update check task: disabled");
+                }
+            }
+            
         } catch (Exception e) {
             errors.add("Task rescheduling error: " + e.getMessage());
         }

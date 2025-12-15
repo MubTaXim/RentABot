@@ -113,14 +113,52 @@ See `config.yml` for full configuration options.
 
 ## Permissions
 
-| Permission | Description |
-|------------|-------------|
-| `rentabot.use` | Use basic bot commands |
-| `rentabot.create` | Create new bots |
-| `rentabot.admin` | Access admin commands |
-| `rentabot.admin.notify` | Receive update notifications |
-| `rentabot.bypass.limit` | Bypass bot limits |
-| `rentabot.bypass.cooldown` | Bypass creation cooldown |
+### Permission Nodes
+
+| Permission | Description | Default |
+|------------|-------------|---------|
+| `rentabot.use` | Use basic bot commands | true |
+| `rentabot.create` | Create new bots | true |
+| `rentabot.stop` | Stop/pause bots | true |
+| `rentabot.resume` | Resume stopped bots | true |
+| `rentabot.delete` | Delete own bots | true |
+| `rentabot.list` | List owned bots | true |
+| `rentabot.tp` | Teleport to bots | true |
+| `rentabot.rename` | Rename bots | true |
+| `rentabot.admin` | Access admin commands | op |
+| `rentabot.admin.notify` | Receive update notifications | op |
+| `rentabot.bypass.limit` | Bypass bot limits | op |
+| `rentabot.bypass.cooldown` | Bypass creation cooldown | op |
+
+### LuckPerms Setup
+
+**Quick Setup - Grant all player permissions at once:**
+```bash
+# Option 1: Grant individual player permissions
+/lp group default permission set rentabot.use true
+/lp group default permission set rentabot.create true
+/lp group default permission set rentabot.stop true
+/lp group default permission set rentabot.resume true
+/lp group default permission set rentabot.delete true
+/lp group default permission set rentabot.list true
+/lp group default permission set rentabot.tp true
+/lp group default permission set rentabot.rename true
+
+# Option 2: Grant all permissions at once (includes admin)
+/lp group admin permission set rentabot.* true
+```
+
+**VIP/Donor ranks with bypasses:**
+```bash
+/lp group vip permission set rentabot.bypass.cooldown true
+/lp group vip permission set rentabot.bypass.limit true
+```
+
+**Admin/Staff permissions:**
+```bash
+/lp group admin permission set rentabot.admin true
+/lp group admin permission set rentabot.admin.notify true
+```
 
 ## PlaceholderAPI Placeholders
 
@@ -153,9 +191,25 @@ See `shopguiplus-example.yml` for full setup.
 mvn clean package
 ```
 
-Output: `target/RentABot-1.3.0.jar`
+Output: `target/RentABot-<version>.jar`
 
 ## Changelog
+
+### v1.3.6
+- **Chat-based bot naming** - GUI shop now prompts users to choose bot names in chat
+- **Pre-validation** - Validates names before creation (prevents join errors)
+- **Blocked words enforcement** - Both GUI and command check blocked words
+- **Periodic update checks** - Configurable automatic update checking (default: 6 hours)
+- **Better error messages** - Invalid names show specific error with retry option
+- Added `updates.check-interval-hours` config option
+- Added `rentabot.resume` and `rentabot.delete` permissions to plugin.yml
+- Updated README with complete LuckPerms permission setup
+
+### v1.3.5
+- Added 17 configurable sound effects for all bot actions
+- Centralized sound system via MessageUtil
+- Fixed username case sensitivity bug (AuthMe compatibility)
+- Username sanitization now normalizes to consistent casing
 
 ### v1.3.0
 - Added comprehensive reload system with subcommands
@@ -184,6 +238,41 @@ For issues, please create a [GitHub issue](https://github.com/MubTaXim/RentABot/
 - Plugin version  
 - Full error logs
 - Steps to reproduce
+
+## Troubleshooting
+
+### Bot won't connect / AuthMe error
+- Ensure `hooks.authme.enabled: true` in config
+- Check that the bot username is valid (only A-Z, 0-9, _)
+- Verify server allows offline mode connections
+
+### "Name already taken" error
+- Bot names must be unique server-wide
+- Try a different name or delete the existing bot
+
+### Bot gets kicked immediately
+- Check for anti-bot plugins (BotSentry, etc.)
+- Add bot prefix to whitelist in anti-bot config
+- Ensure server isn't at max player capacity
+
+### Economy not working
+- Verify Vault is installed
+- Check an economy plugin (EssentialsX, CMI) is active
+- Run `/vault-info` to verify economy hook
+
+## FAQ
+
+**Q: Can Bedrock players (via Geyser) use this plugin?**
+A: Yes! Bedrock players can own and manage bots normally. Bots connect as Java clients.
+
+**Q: Do bots count towards player slots?**
+A: Yes, bots are real connections and count as players.
+
+**Q: What happens when a bot dies?**
+A: Bots auto-respawn and return to their saved location (last TPA position).
+
+**Q: Can I use this with BungeeCord/Velocity?**
+A: Yes, configure `server.host` and `server.port` in config.yml to point to the correct backend server.
 
 ## License
 

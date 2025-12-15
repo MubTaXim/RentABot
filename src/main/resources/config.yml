@@ -21,6 +21,10 @@ updates:
   
   # Notify admins when they join the server
   notify-on-join: true
+  
+  # Periodic update check interval in hours (0 = disabled)
+  # Recommended: 6-24 hours to avoid rate limiting
+  check-interval-hours: 6
 
 # ========================
 #    Server Connection
@@ -55,10 +59,6 @@ economy:
   
   # Maximum rental duration (hours)
   max-hours: 168  # 1 week
-  
-  # Refund percentage when manually stopping a bot early (0-100)
-  # Set to 0 to disable refunds
-  refund-percentage: 50
   
   # Currency symbol for messages
   currency-symbol: "$"

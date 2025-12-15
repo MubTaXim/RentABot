@@ -92,6 +92,7 @@ public class RentABot extends JavaPlugin {
         // Check for updates
         this.updateChecker = new UpdateChecker(this, "MubTaXim", "RentABot");
         updateChecker.checkForUpdates();
+        updateChecker.startPeriodicCheck();
         
         // Startup message
         getLogger().info("╔════════════════════════════════════════╗");
@@ -106,6 +107,11 @@ public class RentABot extends JavaPlugin {
     
     @Override
     public void onDisable() {
+        // Stop periodic update check
+        if (updateChecker != null) {
+            updateChecker.stopPeriodicCheck();
+        }
+        
         // Disconnect all bots gracefully
         if (botManager != null) {
             getLogger().info("Disconnecting all bots...");

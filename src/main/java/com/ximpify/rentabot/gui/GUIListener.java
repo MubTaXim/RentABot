@@ -29,12 +29,15 @@ public class GUIListener implements Listener {
     private final Map<UUID, String> managingBot;
     // Track rename mode
     private final Map<UUID, String> renamingBot;
+    // Track pending bot creation (UUID -> hours to purchase)
+    private final Map<UUID, Integer> pendingCreation;
     
     public GUIListener(RentABot plugin, GUIManager guiManager) {
         this.plugin = plugin;
         this.guiManager = guiManager;
         this.managingBot = new HashMap<>();
         this.renamingBot = new HashMap<>();
+        this.pendingCreation = new HashMap<>();
     }
     
     @EventHandler
@@ -282,34 +285,23 @@ public class GUIListener implements Listener {
                 // Check if can afford
                 if (plugin.isEconomyEnabled() && !plugin.getEconomyHandler().hasBalance(player, price)) {
                     plugin.getMessageUtil().sendRaw(player, "&cYou don't have enough money!");
+                    plugin.getMessageUtil().playSound(player, "on-error");
                     return;
                 }
                 
                 player.closeInventory();
                 
-                // Generate bot name
-                String botName = player.getName() + "_Bot" + 
-                    (plugin.getBotManager().getPlayerBotCount(player.getUniqueId()) + 1);
-                
-                // Create the bot
-                RentalResult result = plugin.getRentalManager().createRental(player, botName, duration);
-                
-                if (result.success()) {
-                    String priceStr = result.args().length > 2 ? result.args()[2] : "Free";
-                    plugin.getMessageUtil().send(player, "create.success",
-                        "bot", botName,
-                        "hours", String.valueOf(duration),
-                        "price", priceStr);
-                    plugin.getMessageUtil().playSound(player, "on-create");
-                } else {
-                    String messageKey = "create." + result.messageKey();
-                    // Pass reason if available (for invalid-name errors)
-                    if (result.args().length > 0) {
-                        plugin.getMessageUtil().send(player, messageKey, "reason", result.args()[0]);
-                    } else {
-                        plugin.getMessageUtil().send(player, messageKey);
-                    }
-                }
+                // Prompt player to type bot name in chat
+                pendingCreation.put(player.getUniqueId(), duration);
+                plugin.getMessageUtil().sendRaw(player, "");
+                plugin.getMessageUtil().sendRaw(player, "&#00D4FF&l⚡ &fChoose a name for your bot!");
+                plugin.getMessageUtil().sendRaw(player, "");
+                plugin.getMessageUtil().sendRaw(player, "&7Type the bot name in chat.");
+                plugin.getMessageUtil().sendRaw(player, "&7Requirements: &f3-16 characters&7, &fA-Z, 0-9, _ &7only");
+                plugin.getMessageUtil().sendRaw(player, "&7Example: &fMyFarmBot&7, &fAFK_Miner&7, &fBot1");
+                plugin.getMessageUtil().sendRaw(player, "");
+                plugin.getMessageUtil().sendRaw(player, "&7Type &ccancel &7to cancel purchase.");
+                plugin.getMessageUtil().sendRaw(player, "");
                 return;
             }
         }
@@ -438,5 +430,10 @@ public class GUIListener implements Listener {
     // Expose rename map for chat listener
     public Map<UUID, String> getRenamingBot() {
         return renamingBot;
+    }
+    
+    // Expose pending creation map for chat listener
+    public Map<UUID, Integer> getPendingCreation() {
+        return pendingCreation;
     }
 }

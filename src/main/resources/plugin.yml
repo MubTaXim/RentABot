@@ -30,6 +30,8 @@ permissions:
       rentabot.use: true
       rentabot.create: true
       rentabot.stop: true
+      rentabot.resume: true
+      rentabot.delete: true
       rentabot.list: true
       rentabot.tp: true
       rentabot.rename: true
@@ -47,6 +49,14 @@ permissions:
   
   rentabot.stop:
     description: Permission to stop own bots
+    default: true
+  
+  rentabot.resume:
+    description: Permission to resume stopped bots
+    default: true
+  
+  rentabot.delete:
+    description: Permission to delete own bots
     default: true
   
   rentabot.list:
