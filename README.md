@@ -24,10 +24,12 @@ A production-ready Minecraft plugin that allows players to rent bot accounts for
 
 ## Requirements
 
-- Paper/Spigot 1.21+
+- **Paper 1.21+** (recommended) or Spigot 1.21+
 - Java 17+
 - Vault (for economy)
 - Optional: AuthMe, PlaceholderAPI, Essentials, ShopGUIPlus
+
+> **Note:** Both Paper and Spigot are fully supported. Paper forks (Purpur, Pufferfish) also work perfectly.
 
 ## Installation
 
@@ -261,6 +263,9 @@ For issues, please create a [GitHub issue](https://github.com/MubTaXim/RentABot/
 - Run `/vault-info` to verify economy hook
 
 ## FAQ
+
+**Q: Does this work on Spigot or only Paper?**
+A: Both are fully supported! Spigot, Paper, and Paper forks (Purpur, Pufferfish, etc.) all work.
 
 **Q: Can Bedrock players (via Geyser) use this plugin?**
 A: Yes! Bedrock players can own and manage bots normally. Bots connect as Java clients.

@@ -4,12 +4,11 @@ import com.ximpify.rentabot.RentABot;
 import com.ximpify.rentabot.bot.RentableBot;
 import com.ximpify.rentabot.gui.GUIListener;
 import com.ximpify.rentabot.rental.RentalManager.RentalResult;
-import io.papermc.paper.event.player.AsyncChatEvent;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
@@ -17,7 +16,9 @@ import java.util.Optional;
 
 /**
  * Handles player-related events for RentABot.
+ * Uses AsyncPlayerChatEvent for Spigot compatibility.
  */
+@SuppressWarnings("deprecation") // AsyncPlayerChatEvent is deprecated but needed for Spigot support
 public class PlayerListener implements Listener {
     
     private final RentABot plugin;
@@ -76,7 +77,7 @@ public class PlayerListener implements Listener {
     }
     
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlayerChat(AsyncChatEvent event) {
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
         
         // Check for pending bot creation (from shop GUI)
@@ -85,7 +86,7 @@ public class PlayerListener implements Listener {
             event.setCancelled(true);
             guiListener.getPendingCreation().remove(player.getUniqueId());
             
-            String message = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
+            String message = event.getMessage().trim();
             
             // Check for cancel
             if (message.equalsIgnoreCase("cancel")) {
@@ -155,7 +156,7 @@ public class PlayerListener implements Listener {
             event.setCancelled(true);
             guiListener.getRenamingBot().remove(player.getUniqueId());
             
-            String message = PlainTextComponentSerializer.plainText().serialize(event.message());
+            String message = event.getMessage();
             
             // Check for cancel
             if (message.equalsIgnoreCase("cancel")) {
